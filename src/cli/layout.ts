@@ -9,6 +9,7 @@ import ora, { Ora } from 'ora';
 export class FixedBottomToolbar {
   private spinner: Ora | null = null;
   private isActive = false;
+  private loadingText: string | null = null;
   private readonly promptPrefix = '❯ ';
   private readonly helpText = '/quit to exit the Tmates CLI';
 
@@ -38,8 +39,11 @@ export class FixedBottomToolbar {
     // Clear entire screen and position at top
     output.write('\x1b[2J\x1b[H');
 
-    // Just write the content normally - promptUser will handle bottom area positioning
+    // Write the content
     output.write(content);
+    
+    // Add spacing and preserve any loading indicator that should appear here
+    output.write('\n');
   }
 
   /**
@@ -52,19 +56,24 @@ export class FixedBottomToolbar {
     }
 
     this.hideSpinner();
-    this.moveToSpinnerLine();
-    this.spinner = ora({ text, stream: output }).start();
+    // Start the actual animated spinner
+    this.spinner = ora({
+      text,
+      stream: output,
+      color: 'cyan'
+    }).start();
+    this.loadingText = text;
   }
 
   /**
    * Hide the current spinner
    */
   hideSpinner(): void {
-    if (this.spinner) {
+    if (this.spinner && this.spinner.stop) {
       this.spinner.stop();
       this.spinner = null;
-      this.clearSpinnerLine();
     }
+    this.loadingText = null;
   }
 
   /**
@@ -72,18 +81,20 @@ export class FixedBottomToolbar {
    */
   showSuccess(text: string): void {
     if (!output.isTTY) {
-      output.write(`✓ ${text}\n`);
+      output.write(`${text}\n`);
       return;
     }
 
     this.hideSpinner();
-    this.moveToSpinnerLine();
-    output.write(`${chalk.green('✓')} ${text}`);
-    this.clearToEndOfLine();
+    // Show success in loading area (above prompt)
+    output.write(`${chalk.green(`✓ ${text}`)}\n`);
     setTimeout(() => {
-      this.clearSpinnerLine();
-      this.renderBottomArea();
-    }, 1500);
+      // Clear the success message after 2 seconds
+      if (output.isTTY) {
+        readline.moveCursor(output, 0, -1);
+        readline.clearLine(output, 0);
+      }
+    }, 2000);
   }
 
   /**
@@ -91,73 +102,61 @@ export class FixedBottomToolbar {
    */
   showError(text: string): void {
     if (!output.isTTY) {
-      output.write(`✗ ${text}\n`);
+      output.write(`Error: ${text}\n`);
       return;
     }
 
     this.hideSpinner();
-    this.moveToSpinnerLine();
-    output.write(`${chalk.red('✗')} ${text}`);
-    this.clearToEndOfLine();
+    // Show error in loading area (above prompt)
+    output.write(`${chalk.red(`✗ ${text}`)}\n`);
     setTimeout(() => {
-      this.clearSpinnerLine();
-      this.renderBottomArea();
+      // Clear the error message after 2 seconds
+      if (output.isTTY) {
+        readline.moveCursor(output, 0, -1);
+        readline.clearLine(output, 0);
+      }
     }, 2000);
   }
 
   /**
-   * Prompt for user input using the fixed bottom area
+   * Get user input with the fixed bottom toolbar
    */
-  async promptUser(options: { hint?: string } = {}): Promise<string | null> {
+  async promptUser(): Promise<string> {
     if (!output.isTTY) {
-      return this.promptUserNonInteractive(options);
+      return await new Promise<string>((resolve) => {
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        rl.question('Enter command: ', (answer) => {
+          rl.close();
+          resolve(answer);
+        });
+      });
     }
 
-    this.hideSpinner();
-
-    // Ensure bottom area is properly rendered before we start prompting
-    this.renderBottomArea();
-
-    const rl = readline.createInterface({
-      input,
-      output,
-      terminal: true,
-    });
-
-    // Position at prompt line and set up readline
-    this.moveToPromptLine();
-    rl.setPrompt(this.promptPrefix);
-    rl.prompt();
-
-    // Handle hint vs help text
-    if (options.hint) {
-      this.moveToHelpLine();
-      output.write(chalk.gray(options.hint));
-      this.moveToPromptLine();
-      readline.moveCursor(output, this.promptPrefix.length, 0);
+    // Position 2: Show EITHER loading indicator OR help text (same line!)
+    if (this.loadingText) {
+      output.write(`${chalk.dim('⏳')} ${this.loadingText}...\n`);
     } else {
-      // Make sure help text is still there after readline setup
-      this.moveToHelpLine();
-      output.write(chalk.gray(this.helpText));
-      this.moveToPromptLine();
-      readline.moveCursor(output, this.promptPrefix.length, 0);
+      output.write(`${chalk.dim('• quit: Exit the CLI')}\n`);
     }
 
-    const answer = await new Promise<string | null>((resolve) => {
-      const finalize = (value: string | null): void => {
-        rl.close();
-        resolve(value);
-      };
-
-      rl.once('line', (line) => finalize(line));
-      rl.once('SIGINT', () => finalize(null));
+    // Position 3: Create readline interface with the prompt
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: '❯ '
     });
 
-    // Clear the prompt line and restore bottom area
-    this.clearPromptLine();
-    this.renderBottomArea();
-
-    return answer;
+    return new Promise<string>((resolve) => {
+      rl.prompt();
+      
+      rl.on('line', (answer) => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    });
   }
 
   /**
@@ -179,27 +178,27 @@ export class FixedBottomToolbar {
   private renderBottomArea(): void {
     if (!output.isTTY) return;
 
-    const terminalHeight = process.stdout.rows || 24;
-
-    // Save current cursor position
-    output.write('\x1b[s');
-
-    // Force cursor to spinner line (3rd from bottom)
-    readline.cursorTo(output, 0, terminalHeight - 3);
+    // Position cursor at the beginning of current line
+    readline.cursorTo(output, 0);
+    
+    // Render spinner line (empty for now)
     this.clearLine();
-
-    // Force cursor to prompt line (2nd from bottom)
-    readline.cursorTo(output, 0, terminalHeight - 2);
+    output.write('\n');
+    
+    // Render prompt line - make it more visible for debugging
+    readline.cursorTo(output, 0);
     output.write(this.promptPrefix);
     this.clearToEndOfLine();
-
-    // Force cursor to help line (bottom line)
-    readline.cursorTo(output, 0, terminalHeight - 1);
+    output.write('\n');
+    
+    // Render help line - make it more visible for debugging
+    readline.cursorTo(output, 0);
     output.write(chalk.gray(this.helpText));
     this.clearToEndOfLine();
 
-    // Position cursor back at prompt for user input
-    readline.cursorTo(output, this.promptPrefix.length, terminalHeight - 2);
+    // Position cursor back at prompt for user input (go up one line to prompt)
+    readline.moveCursor(output, 0, -1);
+    readline.cursorTo(output, this.promptPrefix.length);
   }
 
   private positionForBottomArea(): void {
@@ -247,7 +246,10 @@ export class FixedBottomToolbar {
   }
 
   private clearPromptLine(): void {
+    // Clear both prompt and help lines to avoid leftover text
     this.moveToPromptLine();
+    this.clearLine();
+    this.moveToHelpLine();
     this.clearLine();
   }
 
