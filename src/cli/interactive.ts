@@ -230,7 +230,7 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
   });
   output.write('\n');
 
-  const choiceRaw = await promptUser('Select an option', {
+  const choiceRaw = await promptUser('', {
     hint: '/quit to exit the Tmates CLI',
   });
   if (choiceRaw === null) {
@@ -849,58 +849,74 @@ async function promptUser(label: string, options: { hint?: string } = {}): Promi
   });
 
   const promptPrefix = '❯ ';
-  const hintText = options.hint ? chalk.gray(options.hint) : null;
+  const rawLabel = label?.trim() ?? '';
+  const hasLabel = rawLabel.length > 0;
+  const hintText = options.hint ? chalk.gray(options.hint) : '';
   const isInteractive = output.isTTY !== false;
 
-  output.write(`${chalk.bold(label)}\n`);
+  if (hasLabel) {
+    output.write(`${chalk.bold(rawLabel)}\n`);
+  }
 
-  function cleanup(lineHandler: (line: string) => void, sigintHandler: () => void): void {
-    rl.removeListener('line', lineHandler);
-    rl.removeListener('SIGINT', sigintHandler);
+  const renderHint = (): void => {
+    if (!isInteractive) {
+      return;
+    }
+    const currentColumn = promptPrefix.length + rl.line.length;
+    readline.moveCursor(output, 0, 1);
+    readline.cursorTo(output, 0);
+    readline.clearLine(output, 0);
+    if (hintText) {
+      output.write(hintText);
+    }
+    readline.moveCursor(output, 0, -1);
+    readline.cursorTo(output, currentColumn);
+  };
+
+  const rlInternal = rl as unknown as { _refreshLine?: (...args: unknown[]) => void };
+  const originalRefresh =
+    isInteractive && typeof rlInternal._refreshLine === 'function'
+      ? rlInternal._refreshLine.bind(rl)
+      : undefined;
+
+  if (originalRefresh) {
+    rlInternal._refreshLine = (...args: unknown[]) => {
+      originalRefresh(...args);
+      renderHint();
+    };
+  }
+
+  rl.setPrompt(promptPrefix);
+  rl.prompt();
+
+  if (isInteractive) {
+    renderHint();
+  } else {
+    output.write(`${hintText}\n`);
   }
 
   const answer = await new Promise<string | null>((resolve) => {
-    const handleLine = (line: string): void => {
-      cleanup(handleLine, handleSigint);
-      resolve(line);
-    };
-
-    const handleSigint = (): void => {
-      cleanup(handleLine, handleSigint);
-      resolve(null);
-    };
-
-    rl.once('line', handleLine);
-    rl.once('SIGINT', handleSigint);
-
-    rl.setPrompt(promptPrefix);
-    rl.prompt();
-
-    if (hintText) {
-      if (isInteractive) {
-        output.write('\n');
-        output.write(hintText);
-        output.write('\n');
-        readline.moveCursor(output, 0, -2);
-        readline.cursorTo(output, promptPrefix.length);
-      } else {
-        output.write(`${hintText}\n`);
+    const finalize = (value: string | null): void => {
+      if (originalRefresh) {
+        rlInternal._refreshLine = originalRefresh;
       }
-    }
+      rl.close();
+      resolve(value);
+    };
+
+    rl.once('line', (line) => finalize(line));
+    rl.once('SIGINT', () => finalize(null));
   });
 
-  rl.close();
-
   if (isInteractive) {
-    if (hintText) {
-      readline.moveCursor(output, 0, 1);
-      readline.cursorTo(output, 0);
-    } else {
-      output.write('\n');
-    }
-  } else {
-    output.write('\n');
+    readline.moveCursor(output, 0, 1);
+    readline.cursorTo(output, 0);
+    readline.clearLine(output, 0);
+    readline.moveCursor(output, 0, -1);
+    readline.cursorTo(output, 0);
+    readline.clearLine(output, 0);
   }
+  output.write('\n');
 
   return answer;
 }
