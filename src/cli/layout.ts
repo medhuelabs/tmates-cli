@@ -41,7 +41,7 @@ export class FixedBottomToolbar {
 
     // Write the content
     output.write(content);
-    
+
     // Add spacing and preserve any loading indicator that should appear here
     output.write('\n');
   }
@@ -60,7 +60,7 @@ export class FixedBottomToolbar {
     this.spinner = ora({
       text,
       stream: output,
-      color: 'cyan'
+      color: 'cyan',
     }).start();
     this.loadingText = text;
   }
@@ -126,7 +126,7 @@ export class FixedBottomToolbar {
       return await new Promise<string>((resolve) => {
         const rl = readline.createInterface({
           input: process.stdin,
-          output: process.stdout
+          output: process.stdout,
         });
         rl.question('Enter command: ', (answer) => {
           rl.close();
@@ -146,12 +146,12 @@ export class FixedBottomToolbar {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: '❯ '
+      prompt: '❯ ',
     });
 
     return new Promise<string>((resolve) => {
       rl.prompt();
-      
+
       rl.on('line', (answer) => {
         rl.close();
         resolve(answer.trim());
@@ -180,17 +180,17 @@ export class FixedBottomToolbar {
 
     // Position cursor at the beginning of current line
     readline.cursorTo(output, 0);
-    
+
     // Render spinner line (empty for now)
     this.clearLine();
     output.write('\n');
-    
+
     // Render prompt line - make it more visible for debugging
     readline.cursorTo(output, 0);
     output.write(this.promptPrefix);
     this.clearToEndOfLine();
     output.write('\n');
-    
+
     // Render help line - make it more visible for debugging
     readline.cursorTo(output, 0);
     output.write(chalk.gray(this.helpText));
