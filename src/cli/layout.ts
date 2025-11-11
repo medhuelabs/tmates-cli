@@ -20,7 +20,7 @@ export class FixedBottomToolbar {
       return; // Skip layout management in non-interactive mode
     }
     this.isActive = true;
-    
+
     // Just clear screen and mark as initialized
     // Don't render bottom area yet - let the first promptUser() call handle it
     output.write('\x1b[2J\x1b[H');
@@ -37,7 +37,7 @@ export class FixedBottomToolbar {
 
     // Clear entire screen and position at top
     output.write('\x1b[2J\x1b[H');
-    
+
     // Just write the content normally - promptUser will handle bottom area positioning
     output.write(content);
   }
@@ -114,10 +114,10 @@ export class FixedBottomToolbar {
     }
 
     this.hideSpinner();
-    
+
     // Ensure bottom area is properly rendered before we start prompting
     this.renderBottomArea();
-    
+
     const rl = readline.createInterface({
       input,
       output,
@@ -125,7 +125,7 @@ export class FixedBottomToolbar {
     });
 
     // Position at prompt line and set up readline
-    this.moveToPromptLine(); 
+    this.moveToPromptLine();
     rl.setPrompt(this.promptPrefix);
     rl.prompt();
 
@@ -180,19 +180,19 @@ export class FixedBottomToolbar {
     if (!output.isTTY) return;
 
     const terminalHeight = process.stdout.rows || 24;
-    
-    // Save current cursor position 
+
+    // Save current cursor position
     output.write('\x1b[s');
-    
+
     // Force cursor to spinner line (3rd from bottom)
     readline.cursorTo(output, 0, terminalHeight - 3);
     this.clearLine();
-    
+
     // Force cursor to prompt line (2nd from bottom)
     readline.cursorTo(output, 0, terminalHeight - 2);
     output.write(this.promptPrefix);
     this.clearToEndOfLine();
-    
+
     // Force cursor to help line (bottom line)
     readline.cursorTo(output, 0, terminalHeight - 1);
     output.write(chalk.gray(this.helpText));
@@ -202,35 +202,33 @@ export class FixedBottomToolbar {
     readline.cursorTo(output, this.promptPrefix.length, terminalHeight - 2);
   }
 
-
-
   private positionForBottomArea(): void {
     if (!output.isTTY) return;
-    
+
     const terminalHeight = process.stdout.rows || 24;
     const bottomAreaHeight = 3;
-    
+
     // Move to the start of bottom area
     readline.cursorTo(output, 0, terminalHeight - bottomAreaHeight);
   }
 
   private moveToSpinnerLine(): void {
     if (!output.isTTY) return;
-    
+
     const terminalHeight = process.stdout.rows || 24;
     readline.cursorTo(output, 0, terminalHeight - 3);
   }
 
   private moveToPromptLine(): void {
     if (!output.isTTY) return;
-    
+
     const terminalHeight = process.stdout.rows || 24;
     readline.cursorTo(output, 0, terminalHeight - 2);
   }
 
   private moveToHelpLine(): void {
     if (!output.isTTY) return;
-    
+
     const terminalHeight = process.stdout.rows || 24;
     readline.cursorTo(output, 0, terminalHeight - 1);
   }
@@ -263,7 +261,7 @@ export class FixedBottomToolbar {
     if (options.hint) {
       output.write(`${chalk.gray(options.hint)}\n`);
     }
-    
+
     output.write(this.promptPrefix);
 
     const answer = await new Promise<string | null>((resolve) => {

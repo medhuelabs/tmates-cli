@@ -27,7 +27,9 @@ import { promptForEmail, promptForOtp } from './prompts';
 import { brandPrimary, brandPrimaryBold } from './theme';
 import { toolbar } from './layout';
 
-const debugEnabled = Boolean(process.env.DEBUG?.split(',').some((entry) => entry.trim() === 'tmates-cli'));
+const debugEnabled = Boolean(
+  process.env.DEBUG?.split(',').some((entry) => entry.trim() === 'tmates-cli'),
+);
 
 function debugLog(message: string): void {
   if (debugEnabled) {
@@ -80,11 +82,10 @@ export async function launchInteractiveCli(): Promise<void> {
       case 'quit':
         quit = true;
         break;
-      default:
-        {
-          const exhaustiveCheck: never = action;
-          throw new Error(`Unhandled screen action: ${exhaustiveCheck}`);
-        }
+      default: {
+        const exhaustiveCheck: never = action;
+        throw new Error(`Unhandled screen action: ${exhaustiveCheck}`);
+      }
     }
   }
 
@@ -129,14 +130,18 @@ async function ensureInteractiveSession(): Promise<Session | null> {
       return session;
     }
   } catch (error) {
-    toolbar.renderContent(`${chalk.yellow('Failed to restore saved session automatically:')} ${describeError(error)}\n`);
+    toolbar.renderContent(
+      `${chalk.yellow('Failed to restore saved session automatically:')} ${describeError(error)}\n`,
+    );
   }
 
   return runInlineLogin();
 }
 
 async function runInlineLogin(): Promise<Session | null> {
-  toolbar.renderContent(`${chalk.yellow('No active session detected.')} Let\u2019s get you signed in.\n`);
+  toolbar.renderContent(
+    `${chalk.yellow('No active session detected.')} Let\u2019s get you signed in.\n`,
+  );
 
   let email: string;
   try {
@@ -318,15 +323,17 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     }
     const index = parseInt(answer, 10);
     if (Number.isNaN(index) || index < 1 || index > posts.length) {
-      toolbar.renderContent(content + `${chalk.yellow('Select a number between 1 and ' + posts.length)}\n`);
+      toolbar.renderContent(
+        content + `${chalk.yellow('Select a number between 1 and ' + posts.length)}\n`,
+      );
       return { type: 'stay', screen: state };
     }
     const post = posts[index - 1];
-    
+
     toolbar.showSpinner('Loading post details...');
     const detail = await fetchPinboardPost(post.slug);
     toolbar.hideSpinner();
-    
+
     return { type: 'push', screen: { type: 'pinboard-detail', post: detail } };
   } catch (error) {
     toolbar.showError('Failed to load pinboard');
@@ -335,9 +342,12 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
   }
 }
 
-async function handlePinboardDetail(state: { type: 'pinboard-detail'; post: PinboardPost }): Promise<ScreenAction> {
+async function handlePinboardDetail(state: {
+  type: 'pinboard-detail';
+  post: PinboardPost;
+}): Promise<ScreenAction> {
   const post = state.post;
-  
+
   let content = '\n' + chalk.bold(post.title) + '\n';
   if (post.author_display) {
     content += chalk.gray(`By ${post.author_display}`) + '\n';
@@ -404,7 +414,8 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
     });
 
     content += table.toString() + '\n';
-    content += 'Commands: "add <number|key>", "remove <number|key>", "refresh", "back", "home", "/quit"\n';
+    content +=
+      'Commands: "add <number|key>", "remove <number|key>", "refresh", "back", "home", "/quit"\n';
 
     toolbar.renderContent(content);
     const answerRaw = await toolbar.promptUser();
@@ -485,15 +496,20 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     } else {
       content += '\n' + brandPrimaryBold('Messages') + '\n';
       threads.forEach((thread, index) => {
-        const lastActivity = thread.last_activity ? formatDateTime(thread.last_activity) : 'Unknown';
-        const lastMessage = thread.last_message_preview ? truncate(thread.last_message_preview, 80) : '—';
+        const lastActivity = thread.last_activity
+          ? formatDateTime(thread.last_activity)
+          : 'Unknown';
+        const lastMessage = thread.last_message_preview
+          ? truncate(thread.last_message_preview, 80)
+          : '—';
         const itemNumber = `${brandPrimary(String(index + 1))}.`;
         content += `${itemNumber} ${chalk.bold(thread.title || thread.agent_keys.join(', '))} ${chalk.gray(`(${lastActivity})`)}\n`;
         content += `   ${chalk.gray(lastMessage)}\n`;
       });
     }
 
-    content += 'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "refresh", "back", "home", "/quit"\n';
+    content +=
+      'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "refresh", "back", "home", "/quit"\n';
 
     toolbar.renderContent(content);
     debugLog('Prompting for user input on Messages screen.');
@@ -529,13 +545,22 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
         return { type: 'stay', screen: { type: 'messages' } };
       }
       const thread = threads[index - 1];
-      return { type: 'push', screen: { type: 'message-thread', threadId: thread.id, title: thread.title || thread.agent_keys.join(', ') } };
+      return {
+        type: 'push',
+        screen: {
+          type: 'message-thread',
+          threadId: thread.id,
+          title: thread.title || thread.agent_keys.join(', '),
+        },
+      };
     }
 
     switch (command) {
       case 'new':
         if (!restJoined) {
-          toolbar.renderContent(content + chalk.yellow('Specify an agent key, e.g. "new adam".') + '\n');
+          toolbar.renderContent(
+            content + chalk.yellow('Specify an agent key, e.g. "new adam".') + '\n',
+          );
           return { type: 'stay', screen: { type: 'messages' } };
         }
         return await createNewThread(restJoined);
@@ -600,7 +625,9 @@ async function handleThreadMaintenance(
   return { type: 'stay', screen: { type: 'messages' } };
 }
 
-async function handleMessageThread(state: Extract<ScreenState, { type: 'message-thread' }>): Promise<ScreenAction> {
+async function handleMessageThread(
+  state: Extract<ScreenState, { type: 'message-thread' }>,
+): Promise<ScreenAction> {
   let messages = state.messages ? [...state.messages] : [];
   let title = state.title;
   const seenKeys = new Set<string>();
@@ -670,7 +697,9 @@ async function handleMessageThread(state: Extract<ScreenState, { type: 'message-
     output.write(chalk.gray('No messages yet. Start the conversation!\n'));
   } else if (initialStart > 0) {
     output.write(
-      chalk.gray(`Showing last ${messages.length - initialStart} of ${messages.length} messages.\n`),
+      chalk.gray(
+        `Showing last ${messages.length - initialStart} of ${messages.length} messages.\n`,
+      ),
     );
   }
   printMessagesStartingAt(initialStart);
@@ -855,7 +884,6 @@ function truncate(text: string, maxLength: number): string {
   }
   return text.slice(0, maxLength - 1) + '…';
 }
-
 
 function describeError(error: unknown): string {
   if (error instanceof Error) {
