@@ -25,6 +25,7 @@ import { fetchMobileSettings } from '../api/settings';
 import { formatApiError } from '../api/http-client';
 import { promptForEmail, promptForOtp } from './prompts';
 import { brandPrimary, brandPrimaryBold } from './theme';
+import { toolbar } from './layout';
 
 const debugEnabled = Boolean(process.env.DEBUG?.split(',').some((entry) => entry.trim() === 'tmates-cli'));
 
@@ -35,13 +36,17 @@ function debugLog(message: string): void {
 }
 
 export async function launchInteractiveCli(): Promise<void> {
+  // Initialize the fixed bottom toolbar
+  toolbar.init();
+
   const session = await ensureInteractiveSession();
   if (!session) {
-    output.write(
+    toolbar.renderContent(
       `${chalk.yellow('Unable to continue without signing in.')} Run ${chalk.bold(
         'tmates login',
       )} to try again.\n`,
     );
+    toolbar.cleanup();
     return;
   }
 
@@ -83,7 +88,8 @@ export async function launchInteractiveCli(): Promise<void> {
     }
   }
 
-  output.write('\nGoodbye!\n');
+  toolbar.cleanup();
+  output.write('Goodbye!\n');
 }
 
 type ScreenState =
@@ -123,30 +129,30 @@ async function ensureInteractiveSession(): Promise<Session | null> {
       return session;
     }
   } catch (error) {
-    output.write(`${chalk.yellow('Failed to restore saved session automatically:')} ${describeError(error)}\n`);
+    toolbar.renderContent(`${chalk.yellow('Failed to restore saved session automatically:')} ${describeError(error)}\n`);
   }
 
   return runInlineLogin();
 }
 
 async function runInlineLogin(): Promise<Session | null> {
-  output.write(`${chalk.yellow('No active session detected.')} Let\u2019s get you signed in.\n`);
+  toolbar.renderContent(`${chalk.yellow('No active session detected.')} Let\u2019s get you signed in.\n`);
 
   let email: string;
   try {
     email = await promptForEmail();
   } catch (error) {
-    output.write(`${chalk.red(describeError(error))}\n`);
+    toolbar.renderContent(`${chalk.red(describeError(error))}\n`);
     return null;
   }
 
-  const sendingSpinner = ora('Sending one-time passcode...').start();
+  toolbar.showSpinner('Sending one-time passcode...');
   try {
     await sendOtp(email);
-    sendingSpinner.succeed('Passcode sent. Check your email.');
+    toolbar.showSuccess('Passcode sent. Check your email.');
   } catch (error) {
-    sendingSpinner.fail('Failed to send passcode.');
-    output.write(`${chalk.red(describeError(error))}\n`);
+    toolbar.showError('Failed to send passcode.');
+    toolbar.renderContent(`${chalk.red(describeError(error))}\n`);
     return null;
   }
 
@@ -154,19 +160,19 @@ async function runInlineLogin(): Promise<Session | null> {
   try {
     otp = await promptForOtp();
   } catch (error) {
-    output.write(`${chalk.red(describeError(error))}\n`);
+    toolbar.renderContent(`${chalk.red(describeError(error))}\n`);
     return null;
   }
 
-  const verifyingSpinner = ora('Verifying passcode...').start();
+  toolbar.showSpinner('Verifying passcode...');
   try {
     const session = await verifyOtp(email, otp);
-    verifyingSpinner.succeed('Login successful.');
-    output.write(`Welcome, ${chalk.bold(session.user?.email ?? email)}!\n`);
+    toolbar.showSuccess('Login successful.');
+    toolbar.renderContent(`Welcome, ${chalk.bold(session.user?.email ?? email)}!\n`);
     return session;
   } catch (error) {
-    verifyingSpinner.fail('Verification failed.');
-    output.write(`${chalk.red(describeError(error))}\n`);
+    toolbar.showError('Verification failed.');
+    toolbar.renderContent(`${chalk.red(describeError(error))}\n`);
     return null;
   }
 }
@@ -217,22 +223,24 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
   ];
   const headerWidth = headerLines.reduce((max, line) => Math.max(max, line.content.length), 0);
 
-  output.write('\n');
-  output.write(chalk.gray(`┌${'─'.repeat(headerWidth + 2)}┐`) + '\n');
+  // Build content for the scrollable area
+  let content = '\n';
+  content += chalk.gray(`┌${'─'.repeat(headerWidth + 2)}┐`) + '\n';
   headerLines.forEach((line) => {
     const padding = ' '.repeat(headerWidth - line.content.length);
-    output.write(`${chalk.gray('│ ')}${line.render}${padding}${chalk.gray(' │')}\n`);
+    content += `${chalk.gray('│ ')}${line.render}${padding}${chalk.gray(' │')}\n`;
   });
-  output.write(chalk.gray(`└${'─'.repeat(headerWidth + 2)}┘`) + '\n\n');
-  output.write(`${brandPrimaryBold('Home')}\n`);
+  content += chalk.gray(`└${'─'.repeat(headerWidth + 2)}┘`) + '\n\n';
+  content += `${brandPrimaryBold('Home')}\n`;
   menuItems.forEach((item) => {
-    output.write(`${brandPrimary(item.key)} ${chalk.bold(item.label)} ${chalk.gray('\u2014 ' + item.summary)}\n`);
+    content += `${brandPrimary(item.key)} ${chalk.bold(item.label)} ${chalk.gray('\u2014 ' + item.summary)}\n`;
   });
-  output.write('\n');
+  content += '\n';
 
-  const choiceRaw = await promptUser('', {
-    hint: '/quit to exit the Tmates CLI',
-  });
+  // Render content in the scrollable area
+  toolbar.renderContent(content);
+
+  const choiceRaw = await toolbar.promptUser();
   if (choiceRaw === null) {
     return { type: 'quit' };
   }
@@ -259,37 +267,38 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
     case '/exit':
       return { type: 'quit' };
     default:
-      output.write(`${chalk.yellow('Unknown option.')} Try again.\n`);
+      toolbar.renderContent(content + `${chalk.yellow('Unknown option.')} Try again.\n`);
       return { type: 'stay' };
   }
 }
 
 async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promise<ScreenAction> {
-  const spinner = ora('Loading pinboard...').start();
+  toolbar.showSpinner('Loading pinboard...');
   try {
     const posts = await fetchPinboardPosts(state.limit);
-    spinner.stop();
+    toolbar.hideSpinner();
 
+    let content = '\n';
     if (!posts.length) {
-      output.write(`${chalk.gray('No pinboard posts found.')}` + '\n');
+      content += `${chalk.gray('No pinboard posts found.')}\n`;
     } else {
-      output.write('\n' + brandPrimaryBold('Pinboard') + '\n');
+      content += brandPrimaryBold('Pinboard') + '\n';
       posts.forEach((post, index) => {
         const timestamp = post.created_at ? formatDateTime(post.created_at) : 'Unknown date';
         const itemNumber = `${brandPrimary(String(index + 1))}.`;
-        output.write(
-          `${itemNumber} ${chalk.bold(post.title)} ${chalk.gray(`(${timestamp})`)}${
-            post.priority ? chalk.gray(` [${String(post.priority)}]`) : ''
-          }\n`,
-        );
+        content += `${itemNumber} ${chalk.bold(post.title)} ${chalk.gray(`(${timestamp})`)}${
+          post.priority ? chalk.gray(` [${String(post.priority)}]`) : ''
+        }\n`;
         if (post.excerpt) {
-          output.write(`   ${chalk.gray(truncate(post.excerpt, 120))}\n`);
+          content += `   ${chalk.gray(truncate(post.excerpt, 120))}\n`;
         }
       });
     }
 
-    output.write('\nCommands: [number] to open, "refresh", "back", "home", "/quit"\n');
-    const answerRaw = await promptUser('Pinboard');
+    content += '\nCommands: [number] to open, "refresh", "back", "home", "/quit"\n';
+
+    toolbar.renderContent(content);
+    const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
     }
@@ -309,46 +318,53 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     }
     const index = parseInt(answer, 10);
     if (Number.isNaN(index) || index < 1 || index > posts.length) {
-      output.write(`${chalk.yellow('Select a number between 1 and ' + posts.length)}\n`);
+      toolbar.renderContent(content + `${chalk.yellow('Select a number between 1 and ' + posts.length)}\n`);
       return { type: 'stay', screen: state };
     }
     const post = posts[index - 1];
+    
+    toolbar.showSpinner('Loading post details...');
     const detail = await fetchPinboardPost(post.slug);
+    toolbar.hideSpinner();
+    
     return { type: 'push', screen: { type: 'pinboard-detail', post: detail } };
   } catch (error) {
-    spinner.fail('Failed to load pinboard.');
-    output.write(formatApiError(error) + '\n');
+    toolbar.showError('Failed to load pinboard');
+    toolbar.renderContent(formatApiError(error) + '\n');
     return { type: 'back' };
   }
 }
 
 async function handlePinboardDetail(state: { type: 'pinboard-detail'; post: PinboardPost }): Promise<ScreenAction> {
   const post = state.post;
-  output.write('\n' + chalk.bold(post.title) + '\n');
+  
+  let content = '\n' + chalk.bold(post.title) + '\n';
   if (post.author_display) {
-    output.write(chalk.gray(`By ${post.author_display}`) + '\n');
+    content += chalk.gray(`By ${post.author_display}`) + '\n';
   }
   if (post.created_at) {
-    output.write(chalk.gray(formatDateTime(post.created_at)) + '\n');
+    content += chalk.gray(formatDateTime(post.created_at)) + '\n';
   }
-  output.write('\n');
+  content += '\n';
   const body = post.content_md ?? post.excerpt ?? '(no content)';
-  output.write(body.trim() + '\n');
+  content += body.trim() + '\n';
   if (post.attachments?.length) {
-    output.write('\nAttachments:\n');
+    content += '\nAttachments:\n';
     post.attachments.forEach((attachment, index) => {
-      output.write(`  ${index + 1}. ${attachment.label ?? attachment.url} → ${attachment.url}\n`);
+      content += `  ${index + 1}. ${attachment.label ?? attachment.url} → ${attachment.url}\n`;
     });
   }
   if (post.sources?.length) {
-    output.write('\nSources:\n');
+    content += '\nSources:\n';
     post.sources.forEach((source, index) => {
-      output.write(`  ${index + 1}. ${source.label ?? source.url} → ${source.url}\n`);
+      content += `  ${index + 1}. ${source.label ?? source.url} → ${source.url}\n`;
     });
   }
 
-  output.write('\nCommands: "back", "home", "/quit"\n');
-  const answerRaw = await promptUser('Pinboard ▸ Detail');
+  content += '\nCommands: "back", "home", "/quit"\n';
+
+  toolbar.renderContent(content);
+  const answerRaw = await toolbar.promptUser();
   if (answerRaw === null) {
     return { type: 'quit' };
   }
@@ -363,13 +379,13 @@ async function handlePinboardDetail(state: { type: 'pinboard-detail'; post: Pinb
 }
 
 async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAction> {
-  const spinner = ora('Loading teammates...').start();
+  toolbar.showSpinner('Loading teammates...');
   try {
     const store = await fetchAgentStore();
-    spinner.stop();
+    toolbar.hideSpinner();
     const storeMap = new Map(store.available_agents.map((entry) => [entry.key, entry] as const));
 
-    output.write('\n' + brandPrimaryBold('Teammates') + '\n');
+    let content = '\n' + brandPrimaryBold('Teammates') + '\n';
     const table = new Table({
       head: [chalk.bold('#'), chalk.bold('Agent'), chalk.bold('Status')],
       colWidths: [4, 30, 40],
@@ -387,11 +403,11 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
       ]);
     });
 
-    output.write(table.toString() + '\n');
-    output.write(
-      'Commands: "add <number|key>", "remove <number|key>", "refresh", "back", "home", "/quit"\n',
-    );
-    const answerRaw = await promptUser('Teammates');
+    content += table.toString() + '\n';
+    content += 'Commands: "add <number|key>", "remove <number|key>", "refresh", "back", "home", "/quit"\n';
+
+    toolbar.renderContent(content);
+    const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
     }
@@ -414,32 +430,32 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
     const [command, ...rest] = lowered.split(/\s+/);
     const targetRaw = rest.join(' ').trim();
     if (!['add', 'remove'].includes(command)) {
-      output.write(chalk.yellow('Unknown command.') + '\n');
+      toolbar.renderContent(content + chalk.yellow('Unknown command.') + '\n');
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
     const entry = resolveAgentTarget(targetRaw, store.available_agents);
     if (!entry) {
-      output.write(chalk.yellow('No matching agent found.') + '\n');
+      toolbar.renderContent(content + chalk.yellow('No matching agent found.') + '\n');
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
-    const spinnerAction = ora(`${command === 'add' ? 'Enabling' : 'Disabling'} ${entry.name}...`).start();
+    toolbar.showSpinner(`${command === 'add' ? 'Enabling' : 'Disabling'} ${entry.name}...`);
     try {
       const response = await manageAgent(entry.key, command === 'add' ? 'add' : 'remove');
       if (!response.success) {
         throw new Error(response.message || 'Request failed');
       }
-      spinnerAction.succeed(`${entry.name} ${command === 'add' ? 'enabled' : 'disabled'}.`);
+      toolbar.showSuccess(`${entry.name} ${command === 'add' ? 'enabled' : 'disabled'}.`);
     } catch (error) {
-      spinnerAction.fail('Operation failed.');
-      output.write(formatApiError(error) + '\n');
+      toolbar.showError('Operation failed.');
+      toolbar.renderContent(content + formatApiError(error) + '\n');
     }
 
     return { type: 'stay', screen: { type: 'teammates' } };
   } catch (error) {
-    spinner.fail('Failed to load teammates.');
-    output.write(formatApiError(error) + '\n');
+    toolbar.showError('Failed to load teammates');
+    toolbar.renderContent(formatApiError(error) + '\n');
     return { type: 'back' };
   }
 }
@@ -457,32 +473,31 @@ function resolveAgentTarget(target: string, entries: AgentStoreEntry[]): AgentSt
 }
 
 async function handleMessages(_state: { type: 'messages' }): Promise<ScreenAction> {
-  const spinner = ora('Loading conversations...').start();
+  toolbar.showSpinner('Loading conversations...');
   try {
     const threads = await fetchChatThreads();
-    spinner.stop();
+    toolbar.hideSpinner();
     debugLog(`Messages screen rendered ${threads.length} threads.`);
 
+    let content = '';
     if (!threads.length) {
-      output.write(`${chalk.gray('No conversations yet.')} Start one with "new <agent_key>".\n`);
+      content += `${chalk.gray('No conversations yet.')} Start one with "new <agent_key>".\n`;
     } else {
-      output.write('\n' + brandPrimaryBold('Messages') + '\n');
+      content += '\n' + brandPrimaryBold('Messages') + '\n';
       threads.forEach((thread, index) => {
         const lastActivity = thread.last_activity ? formatDateTime(thread.last_activity) : 'Unknown';
         const lastMessage = thread.last_message_preview ? truncate(thread.last_message_preview, 80) : '—';
         const itemNumber = `${brandPrimary(String(index + 1))}.`;
-        output.write(
-          `${itemNumber} ${chalk.bold(thread.title || thread.agent_keys.join(', '))} ${chalk.gray(`(${lastActivity})`)}\n`,
-        );
-        output.write(`   ${chalk.gray(lastMessage)}\n`);
+        content += `${itemNumber} ${chalk.bold(thread.title || thread.agent_keys.join(', '))} ${chalk.gray(`(${lastActivity})`)}\n`;
+        content += `   ${chalk.gray(lastMessage)}\n`;
       });
     }
 
-    output.write(
-      'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "refresh", "back", "home", "/quit"\n',
-    );
+    content += 'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "refresh", "back", "home", "/quit"\n';
+
+    toolbar.renderContent(content);
     debugLog('Prompting for user input on Messages screen.');
-    const rawAnswer = await promptUser('Messages');
+    const rawAnswer = await toolbar.promptUser();
     if (rawAnswer === null) {
       debugLog('Prompt cancelled (null response).');
       return { type: 'quit' };
@@ -510,7 +525,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     if (Number.isInteger(Number(answer))) {
       const index = Number(answer);
       if (index < 1 || index > threads.length) {
-        output.write(chalk.yellow('Invalid thread selection.') + '\n');
+        toolbar.renderContent(content + chalk.yellow('Invalid thread selection.') + '\n');
         return { type: 'stay', screen: { type: 'messages' } };
       }
       const thread = threads[index - 1];
@@ -520,7 +535,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     switch (command) {
       case 'new':
         if (!restJoined) {
-          output.write(chalk.yellow('Specify an agent key, e.g. "new adam".') + '\n');
+          toolbar.renderContent(content + chalk.yellow('Specify an agent key, e.g. "new adam".') + '\n');
           return { type: 'stay', screen: { type: 'messages' } };
         }
         return await createNewThread(restJoined);
@@ -528,28 +543,28 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
       case 'clear':
         return await handleThreadMaintenance(command, restJoined, threads);
       default:
-        output.write(chalk.yellow('Unknown command.') + '\n');
+        toolbar.renderContent(content + chalk.yellow('Unknown command.') + '\n');
         return { type: 'stay', screen: { type: 'messages' } };
     }
   } catch (error) {
-    spinner.fail('Failed to load conversations.');
-    output.write(formatApiError(error) + '\n');
+    toolbar.showError('Failed to load conversations');
+    toolbar.renderContent(formatApiError(error) + '\n');
     return { type: 'back' };
   }
 }
 
 async function createNewThread(agentKey: string): Promise<ScreenAction> {
-  const spinner = ora(`Creating conversation with ${agentKey}...`).start();
+  toolbar.showSpinner(`Creating conversation with ${agentKey}...`);
   try {
     const thread = await createChatThread(agentKey);
-    spinner.succeed('Conversation created.');
+    toolbar.showSuccess('Conversation created.');
     return {
       type: 'push',
       screen: { type: 'message-thread', threadId: thread.id, title: thread.title || agentKey },
     };
   } catch (error) {
-    spinner.fail('Failed to create conversation.');
-    output.write(formatApiError(error) + '\n');
+    toolbar.showError('Failed to create conversation.');
+    toolbar.renderContent(formatApiError(error) + '\n');
     return { type: 'stay', screen: { type: 'messages' } };
   }
 }
@@ -663,7 +678,7 @@ async function handleMessageThread(state: Extract<ScreenState, { type: 'message-
     `${chalk.gray('Commands: type a message, or use /refresh, /back, /home, /quit.')}\n`,
   );
 
-  const promptLine = async (): Promise<string | null> => promptUser('Message');
+  const promptLine = async (): Promise<string | null> => toolbar.promptUser();
 
   let input = await promptLine();
   while (input !== null) {
@@ -756,7 +771,7 @@ async function handleFiles(state: { type: 'files'; limit: number }): Promise<Scr
       });
     }
     output.write('Commands: "refresh", "back", "home", "/quit"\n');
-    const answerRaw = await promptUser('Files');
+    const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
     }
@@ -797,7 +812,7 @@ async function handleSettings(_state: { type: 'settings' }): Promise<ScreenActio
     });
 
     output.write('\nCommands: "back", "home", "/quit"\n');
-    const answerRaw = await promptUser('Settings');
+    const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
     }
@@ -841,85 +856,7 @@ function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 1) + '…';
 }
 
-async function promptUser(label: string, options: { hint?: string } = {}): Promise<string | null> {
-  const rl = readline.createInterface({
-    input,
-    output,
-    terminal: true,
-  });
 
-  const promptPrefix = '❯ ';
-  const rawLabel = label?.trim() ?? '';
-  const hasLabel = rawLabel.length > 0;
-  const hintText = options.hint ? chalk.gray(options.hint) : '';
-  const isInteractive = output.isTTY !== false;
-
-  if (hasLabel) {
-    output.write(`${chalk.bold(rawLabel)}\n`);
-  }
-
-  const renderHint = (): void => {
-    if (!isInteractive) {
-      return;
-    }
-    const currentColumn = promptPrefix.length + rl.line.length;
-    readline.moveCursor(output, 0, 1);
-    readline.cursorTo(output, 0);
-    readline.clearLine(output, 0);
-    if (hintText) {
-      output.write(hintText);
-    }
-    readline.moveCursor(output, 0, -1);
-    readline.cursorTo(output, currentColumn);
-  };
-
-  const rlInternal = rl as unknown as { _refreshLine?: (...args: unknown[]) => void };
-  const originalRefresh =
-    isInteractive && typeof rlInternal._refreshLine === 'function'
-      ? rlInternal._refreshLine.bind(rl)
-      : undefined;
-
-  if (originalRefresh) {
-    rlInternal._refreshLine = (...args: unknown[]) => {
-      originalRefresh(...args);
-      renderHint();
-    };
-  }
-
-  rl.setPrompt(promptPrefix);
-  rl.prompt();
-
-  if (isInteractive) {
-    renderHint();
-  } else {
-    output.write(`${hintText}\n`);
-  }
-
-  const answer = await new Promise<string | null>((resolve) => {
-    const finalize = (value: string | null): void => {
-      if (originalRefresh) {
-        rlInternal._refreshLine = originalRefresh;
-      }
-      rl.close();
-      resolve(value);
-    };
-
-    rl.once('line', (line) => finalize(line));
-    rl.once('SIGINT', () => finalize(null));
-  });
-
-  if (isInteractive) {
-    readline.moveCursor(output, 0, 1);
-    readline.cursorTo(output, 0);
-    readline.clearLine(output, 0);
-    readline.moveCursor(output, 0, -1);
-    readline.cursorTo(output, 0);
-    readline.clearLine(output, 0);
-  }
-  output.write('\n');
-
-  return answer;
-}
 function describeError(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
