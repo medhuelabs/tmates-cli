@@ -7,7 +7,7 @@ import { brandPrimary } from './theme';
 /**
  * Fixed bottom toolbar with structured 3-line layout:
  * Line 1: Loading spinner / Status messages
- * Line 2: User prompt and cursor 
+ * Line 2: User prompt and cursor
  * Line 3: Help/Hint text
  */
 export class FixedBottomToolbar {
@@ -114,7 +114,14 @@ export class FixedBottomToolbar {
 
       // Update spinner line at bottom of screen
       output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
-      output.write(`${chalk.cyan(spinnerFrames[frameIndex % spinnerFrames.length])} ${chalk.gray(text + '...')}`);
+      output.write(
+        `${chalk.cyan(spinnerFrames[frameIndex % spinnerFrames.length])} ${chalk.gray(text + '...')}`,
+      );
+
+      // Ensure prompt line is visible
+      if (!this.promptActive) {
+        output.write(`\x1b[${terminalHeight - 1}H\x1b[2K${this.promptPrefix}`);
+      }
 
       // Restore cursor position
       output.write('\x1b[u');
@@ -265,7 +272,9 @@ export class FixedBottomToolbar {
       // Position cursor at end of input
       this.promptActive = true;
       this.promptCursorColumn = this.promptText.length + inputBuffer.length + 1;
-      output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + inputBuffer.length + 1}G`);
+      output.write(
+        `\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + inputBuffer.length + 1}G`,
+      );
       this.showCursor();
     };
 
@@ -318,17 +327,20 @@ export class FixedBottomToolbar {
           const key = chunk.toString();
           const keyCode = chunk[0];
 
-          if (keyCode === 3) { // Ctrl+C
+          if (keyCode === 3) {
+            // Ctrl+C
             finish(null);
             return;
           }
 
-          if (keyCode === 13) { // Enter
+          if (keyCode === 13) {
+            // Enter
             finish(inputBuffer.trim());
             return;
           }
 
-          if (keyCode === 127) { // Backspace
+          if (keyCode === 127) {
+            // Backspace
             if (inputBuffer.length > 0) {
               inputBuffer = inputBuffer.slice(0, -1);
               refreshDisplay();
@@ -366,7 +378,7 @@ export class FixedBottomToolbar {
         });
       }
     });
-  }  /**
+  } /**
    * Position cursor to bottom area of terminal
    */
   private positionToBottom(): void {
@@ -382,7 +394,7 @@ export class FixedBottomToolbar {
   /**
    * Render the fixed 3-line toolbar structure in correct order:
    * Line 1: Loading/Status (TOP)
-   * Line 2: Prompt (MIDDLE) 
+   * Line 2: Prompt (MIDDLE)
    * Line 3: Help/Hints (BOTTOM)
    */
   private renderFixedToolbar(): void {
@@ -390,7 +402,7 @@ export class FixedBottomToolbar {
 
     // Write in the order they should appear on screen:
 
-    // TOP LINE: Loading/Status area 
+    // TOP LINE: Loading/Status area
     if (this.loadingText) {
       output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}\n`);
     } else {
@@ -400,9 +412,9 @@ export class FixedBottomToolbar {
     // MIDDLE LINE: Prompt area (readline will fill this)
     // Don't write anything here - let readline handle it
 
-    // BOTTOM LINE: Help/Hint area  
+    // BOTTOM LINE: Help/Hint area
     output.write(`${chalk.dim(this.helpText)}\n`);
-  }  /**
+  } /**
    * Move cursor to the prompt line (line 2 of toolbar)
    */
   private moveToPromptLine(): void {
@@ -418,8 +430,17 @@ export class FixedBottomToolbar {
   cleanup(): void {
     this.hideSpinner();
     if (this.isActive && output.isTTY) {
-      // Move cursor below the toolbar area
-      output.write('\n');
+      // Clear the toolbar lines before exiting
+      const terminalHeight = process.stdout.rows || 24;
+
+      // Clear all 3 toolbar lines
+      output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`); // Status line
+      output.write(`\x1b[${terminalHeight - 1}H\x1b[2K`); // Prompt line
+      output.write(`\x1b[${terminalHeight}H\x1b[2K`); // Help line
+
+      // Move cursor to line after toolbar
+      output.write(`\x1b[${terminalHeight + 1}H`);
+      this.showCursor();
     }
     this.isActive = false;
     this.resetHelpText();
