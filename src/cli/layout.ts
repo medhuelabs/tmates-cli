@@ -250,23 +250,48 @@ export class FixedBottomToolbar {
         // Handle raw keypresses to maintain control over display
         process.stdin.setRawMode(true);
 
-        const handleKeypress = (chunk: Buffer) => {
+        let isFinished = false;
+        let didTeardown = false;
+        let sigintHandler: (() => void) | null = null;
+        let handleKeypress: (chunk: Buffer) => void;
+
+        const teardown = () => {
+          if (didTeardown) {
+            return;
+          }
+          didTeardown = true;
+          process.stdin.removeListener('data', handleKeypress);
+          if (sigintHandler) {
+            process.off('SIGINT', sigintHandler);
+            sigintHandler = null;
+          }
+          if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+            process.stdin.setRawMode(false);
+          }
+        };
+
+        const finish = (value: string | null) => {
+          if (isFinished) {
+            return;
+          }
+          isFinished = true;
+          teardown();
+          output.write(`\x1b[${terminalHeight + 1}H`);
+          rl.close();
+          resolve(value);
+        };
+
+        handleKeypress = (chunk: Buffer) => {
           const key = chunk.toString();
           const keyCode = chunk[0];
 
           if (keyCode === 3) { // Ctrl+C
-            process.stdin.setRawMode(false);
-            output.write(`\x1b[${terminalHeight + 1}H`);
-            rl.close();
-            resolve(null);
+            finish(null);
             return;
           }
 
           if (keyCode === 13) { // Enter
-            process.stdin.setRawMode(false);
-            output.write(`\x1b[${terminalHeight + 1}H`);
-            rl.close();
-            resolve(inputBuffer.trim());
+            finish(inputBuffer.trim());
             return;
           }
 
@@ -285,25 +310,14 @@ export class FixedBottomToolbar {
           }
         };
 
+        sigintHandler = () => finish(null);
+
         process.stdin.on('data', handleKeypress);
+        process.on('SIGINT', sigintHandler); // Remove on teardown to avoid accumulating listeners.
+        rl.on('close', teardown);
 
         // Initial display
         refreshDisplay();
-
-        // Cleanup function
-        const cleanup = () => {
-          process.stdin.removeListener('data', handleKeypress);
-          if (process.stdin.setRawMode) {
-            process.stdin.setRawMode(false);
-          }
-        };
-
-        // Handle cleanup on various exit conditions
-        rl.on('close', cleanup);
-        process.on('SIGINT', () => {
-          cleanup();
-          resolve(null);
-        });
       } else {
         // Fallback to standard readline for non-interactive environments
         rl.on('line', (answer) => {
