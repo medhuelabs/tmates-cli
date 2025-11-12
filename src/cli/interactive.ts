@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import type { Session } from '@supabase/supabase-js';
 
+import pkg from '../../package.json';
 import { getActiveSession, refreshSession, sendOtp, verifyOtp } from '../auth/supabase-auth';
 import { fetchPinboardPosts, PinboardPost, fetchPinboardPost } from '../api/pinboard';
 import { AgentStoreEntry, fetchAgentStore, manageAgent } from '../api/teammates';
@@ -109,13 +110,13 @@ type ScreenState =
   | { type: 'teammates' }
   | { type: 'messages' }
   | {
-    type: 'message-thread';
-    threadId: string;
-    title: string;
-    messages?: ChatMessage[];
-    totalMessages?: number;
-    needsRefresh?: boolean;
-  }
+      type: 'message-thread';
+      threadId: string;
+      title: string;
+      messages?: ChatMessage[];
+      totalMessages?: number;
+      needsRefresh?: boolean;
+    }
   | { type: 'files'; limit: number }
   | { type: 'settings' };
 
@@ -222,7 +223,9 @@ async function runInlineLoginOtpStep(email: string): Promise<Session | null> {
 
   const otp = otpInput.trim();
   if (!otp) {
-    toolbar.renderContent(`${chalk.red('Passcode is required.')}\n\nEnter the one-time passcode from your email:\n`);
+    toolbar.renderContent(
+      `${chalk.red('Passcode is required.')}\n\nEnter the one-time passcode from your email:\n`,
+    );
     return await runInlineLoginOtpStep(email);
   }
 
@@ -230,13 +233,17 @@ async function runInlineLoginOtpStep(email: string): Promise<Session | null> {
   try {
     const session = await verifyOtp(email, otp);
     toolbar.clearSpinner();
-    await new Promise(resolve => setTimeout(resolve, 100));
-    toolbar.renderContent(`${chalk.green('✓ Login successful!')} Welcome, ${chalk.bold(session.user?.email ?? email)}!\n\n`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    toolbar.renderContent(
+      `${chalk.green('✓ Login successful!')} Welcome, ${chalk.bold(session.user?.email ?? email)}!\n\n`,
+    );
     return session;
   } catch (error) {
     toolbar.showError('Verification failed.');
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toolbar.renderContent(`${chalk.red(describeError(error))}\n\nTry again. Enter the one-time passcode from your email:\n`);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    toolbar.renderContent(
+      `${chalk.red(describeError(error))}\n\nTry again. Enter the one-time passcode from your email:\n`,
+    );
     return await runInlineLoginOtpStep(email);
   }
 }
@@ -275,16 +282,12 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
 
   const email = state.session.user?.email ?? 'unknown user';
 
-  const ascii = [
-    '╭───╮ ',
-    '│^‿^│ ',
-    '╰───╯ '
-  ];
+  const ascii = ['╭───╮ ', '│^‿^│ ', '╰───╯ '];
 
   const headerLines = [
     {
-      content: 'Welcome to Tmates!',
-      render: brandPrimaryBold('Welcome to Tmates!'),
+      content: `Welcome to Tmates! v${pkg.version}`,
+      render: `${brandPrimaryBold('Welcome to Tmates!')} ${chalk.dim(`v${pkg.version}`)}`,
     },
     {
       content: `Signed in as ${email}`,
@@ -297,7 +300,7 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
   ];
 
   // Calculate widths for the combined layout
-  const asciiWidth = Math.max(...ascii.map(line => line.length));
+  const asciiWidth = Math.max(...ascii.map((line) => line.length));
   const textWidth = headerLines.reduce((max, line) => Math.max(max, line.content.length), 0);
   const totalWidth = asciiWidth + 1 + textWidth; // ascii + space + text
 
@@ -374,8 +377,9 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
       posts.forEach((post, index) => {
         const timestamp = post.created_at ? formatDateTime(post.created_at) : 'Unknown date';
         const itemNumber = `${brandPrimary(String(index + 1))}.`;
-        content += `${itemNumber} ${chalk.bold(post.title)} ${chalk.gray(`(${timestamp})`)}${post.priority ? chalk.gray(` [${String(post.priority)}]`) : ''
-          }\n`;
+        content += `${itemNumber} ${chalk.bold(post.title)} ${chalk.gray(`(${timestamp})`)}${
+          post.priority ? chalk.gray(` [${String(post.priority)}]`) : ''
+        }\n`;
         if (post.excerpt) {
           content += `   ${chalk.gray(truncate(post.excerpt, 120))}\n`;
         }
@@ -569,7 +573,8 @@ function resolveAgentTarget(target: string, entries: AgentStoreEntry[]): AgentSt
 }
 
 async function handleMessages(_state: { type: 'messages' }): Promise<ScreenAction> {
-  const hint = '? [number]=open new <agent_key> delete <number> clear <number> /refresh /back /home /quit';
+  const hint =
+    '? [number]=open new <agent_key> delete <number> clear <number> /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
   toolbar.showSpinner('Loading conversations');
