@@ -2,6 +2,7 @@ import readline from 'readline';
 import { stdin as input, stdout as output } from 'process';
 import chalk from 'chalk';
 import ora, { Ora } from 'ora';
+import { brandPrimary } from './theme';
 
 /**
  * Fixed bottom toolbar with structured 3-line layout:
@@ -13,7 +14,8 @@ export class FixedBottomToolbar {
   private spinner: Ora | NodeJS.Timeout | null = null;
   private isActive = false;
   private loadingText: string | null = null;
-  private readonly promptPrefix = '> ';
+  private readonly promptText = '> ';
+  private readonly promptPrefix = brandPrimary('> ');
   private readonly helpText = '? /quit /back /home';
 
   /**
@@ -80,7 +82,7 @@ export class FixedBottomToolbar {
 
       // Update spinner line at bottom of screen
       output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
-      output.write(`${chalk.cyan(spinnerFrames[frameIndex % spinnerFrames.length])} ${text}...`);
+      output.write(`${chalk.cyan(spinnerFrames[frameIndex % spinnerFrames.length])} ${chalk.gray(text + '...')}`);
 
       // Restore cursor position
       output.write('\x1b[u');
@@ -202,13 +204,13 @@ export class FixedBottomToolbar {
     // Line 1 (top): Spinner area - always show something
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
     if (this.loadingText) {
-      output.write(`${chalk.cyan('⠋')} ${this.loadingText}...`);
+      output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}`);
     } else {
-      output.write(`${chalk.green('✓')} Ready`);
+      output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
     }
 
     // Position cursor at prompt line for input
-    output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptPrefix.length + 1}G`);
+    output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + 1}G`);
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -231,13 +233,13 @@ export class FixedBottomToolbar {
       // Line 1 (top): Spinner area
       output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
       if (this.loadingText) {
-        output.write(`${chalk.cyan('⠋')} ${this.loadingText}...`);
+        output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}`);
       } else {
-        output.write(`${chalk.green('✓')} Ready`);
+        output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
       }
 
       // Position cursor at end of input
-      output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptPrefix.length + inputBuffer.length + 1}G`);
+      output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + inputBuffer.length + 1}G`);
     };
 
     return new Promise<string | null>((resolve) => {
@@ -343,7 +345,7 @@ export class FixedBottomToolbar {
 
     // TOP LINE: Loading/Status area 
     if (this.loadingText) {
-      output.write(`${chalk.cyan('⠋')} ${this.loadingText}...\n`);
+      output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}\n`);
     } else {
       output.write('\n'); // Empty line when no loading
     }

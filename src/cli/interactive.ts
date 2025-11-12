@@ -263,12 +263,16 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
 
   const headerLines = [
     {
-      content: 'Welcome back!',
-      render: chalk.bold('Welcome back!'),
+      content: 'Welcome to Tmates!',
+      render: brandPrimaryBold('Welcome to Tmates!'),
     },
     {
       content: `Signed in as ${email}`,
       render: `${chalk.gray('Signed in as ')}${chalk.bold(email)}`,
+    },
+    {
+      content: 'Ready to collaborate!',
+      render: chalk.dim('Ready to collaborate!'),
     },
   ];
 
@@ -289,9 +293,9 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
   const line2Padding = ' '.repeat(textWidth - headerLines[1].content.length);
   content += `${chalk.gray('│ ')}${brandPrimary(ascii[1])} ${headerLines[1].render}${line2Padding}${chalk.gray(' │')}\n`;
 
-  // Third line: ASCII art bottom + empty space
-  const line3Padding = ' '.repeat(textWidth);
-  content += `${chalk.gray('│ ')}${brandPrimary(ascii[2])} ${line3Padding}${chalk.gray(' │')}\n`;
+  // Third line: ASCII art bottom + Ready to collaborate!
+  const line3Padding = ' '.repeat(textWidth - headerLines[2].content.length);
+  content += `${chalk.gray('│ ')}${brandPrimary(ascii[2])} ${headerLines[2].render}${line3Padding}${chalk.gray(' │')}\n`;
   content += chalk.gray(`└${'─'.repeat(totalWidth + 2)}┘`) + '\n\n';
   content += `${brandPrimaryBold('Home')}\n`;
   menuItems.forEach((item) => {
