@@ -149,7 +149,7 @@ async function ensureInteractiveSession(): Promise<Session | null> {
 
 async function runInlineLogin(): Promise<Session | null> {
   toolbar.renderContent(
-    `${chalk.yellow('No active session detected.')} Let\u2019s get you signed in.\n\nEnter your email address:\n`,
+    `${chalk.yellow('No active session detected.')} Let's get you signed in.\n\nEnter your email address:\n`,
   );
 
   let emailInput = await toolbar.promptUser();
@@ -168,15 +168,20 @@ async function runInlineLogin(): Promise<Session | null> {
     await sendOtp(email);
     toolbar.clearSpinner();
     // Wait a moment to let any pending UI updates complete
-    await new Promise(resolve => setTimeout(resolve, 100));
-    toolbar.renderContent(`${chalk.green('✓ Passcode sent')} to ${chalk.bold(email)}.\n\nEnter the one-time passcode from your email:\n`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    toolbar.renderContent(
+      `${chalk.green('✓ Passcode sent')} to ${chalk.bold(email)}.\n\nEnter the one-time passcode from your email:\n`,
+    );
   } catch (error) {
     toolbar.showError('Failed to send passcode.');
     // Wait a moment to let the error message display
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toolbar.renderContent(`${chalk.red(describeError(error))}\n\nTry again. Enter your email address:\n`);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    toolbar.renderContent(
+      `${chalk.red(describeError(error))}\n\nTry again. Enter your email address:\n`,
+    );
     return await runInlineLogin();
   }
+
   let otpInput = await toolbar.promptUser();
   if (otpInput === null) {
     return null;
@@ -184,7 +189,9 @@ async function runInlineLogin(): Promise<Session | null> {
 
   const otp = otpInput.trim();
   if (!otp) {
-    toolbar.renderContent(`${chalk.red('Passcode is required.')}\n\nEnter the one-time passcode from your email:\n`);
+    toolbar.renderContent(
+      `${chalk.red('Passcode is required.')}\n\nEnter the one-time passcode from your email:\n`,
+    );
     return await runInlineLoginOtpStep(email);
   }
 
@@ -192,13 +199,17 @@ async function runInlineLogin(): Promise<Session | null> {
   try {
     const session = await verifyOtp(email, otp);
     toolbar.hideSpinner();
-    await new Promise(resolve => setTimeout(resolve, 100));
-    toolbar.renderContent(`${chalk.green('✓ Login successful!')} Welcome, ${chalk.bold(session.user?.email ?? email)}!\n\n`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    toolbar.renderContent(
+      `${chalk.green('✓ Login successful!')} Welcome, ${chalk.bold(session.user?.email ?? email)}!\n\n`,
+    );
     return session;
   } catch (error) {
     toolbar.showError('Verification failed.');
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toolbar.renderContent(`${chalk.red(describeError(error))}\n\nTry again. Enter the one-time passcode from your email:\n`);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    toolbar.renderContent(
+      `${chalk.red(describeError(error))}\n\nTry again. Enter the one-time passcode from your email:\n`,
+    );
     return await runInlineLoginOtpStep(email);
   }
 }
@@ -863,13 +874,14 @@ async function handleMessageThread(
       const sent = await sendChatMessage(state.threadId, { content: trimmed });
       toolbar.clearSpinner();
       toolbar.showSuccess('Message sent.');
+      await new Promise((resolve) => setTimeout(resolve, 750));
+
       const offset = messages.length;
       messages.push(sent);
       const sentContent = printMessagesStartingAt(offset);
       appendToConversation(sentContent);
 
-      const nextInputPromise = promptLine();
-
+      toolbar.showSpinner('Waiting for replies...');
       try {
         const baseline = messages.length;
         const newMessages = await pollForAgentReplies(state.threadId, baseline, 8, 1200);
@@ -881,10 +893,9 @@ async function handleMessageThread(
         }
       } catch (error) {
         debugLog(`Failed to retrieve agent replies: ${describeError(error)}`);
+      } finally {
+        toolbar.clearSpinner();
       }
-
-      input = await nextInputPromise;
-      continue;
     } catch (error) {
       toolbar.clearSpinner();
       toolbar.showError('Failed to send message.');
@@ -892,6 +903,9 @@ async function handleMessageThread(
       input = await promptLine();
       continue;
     }
+
+    input = await promptLine();
+    continue;
   }
 
   state.messages = messages;

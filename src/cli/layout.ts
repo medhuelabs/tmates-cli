@@ -23,6 +23,7 @@ export class FixedBottomToolbar {
   private promptActive = false;
   private cursorHidden = false;
   private promptRefresh: (() => void) | null = null;
+  private statusOverrideText: string | null = null;
 
   /**
    * Initialize the fixed bottom area (call once at app start)
@@ -97,6 +98,7 @@ export class FixedBottomToolbar {
 
     this.hideSpinner();
     this.clearStatusResetTimer();
+    this.clearStatusOverride();
     this.loadingText = text;
 
     // Start animated spinner that updates the toolbar
@@ -167,8 +169,9 @@ export class FixedBottomToolbar {
     this.hideSpinner();
     this.loadingText = null;
     this.clearStatusResetTimer();
-    this.writeStatus(`${chalk.green(`✓ ${text}`)}`);
+    this.setStatusOverride(`${chalk.green(`✓ ${text}`)}`);
     this.statusResetTimer = setTimeout(() => {
+      this.clearStatusOverride();
       this.renderReadyStatus();
       this.statusResetTimer = null;
     }, 2000);
@@ -186,8 +189,9 @@ export class FixedBottomToolbar {
     this.hideSpinner();
     this.loadingText = null;
     this.clearStatusResetTimer();
-    this.writeStatus(`${chalk.red(`✗ ${text}`)}`);
+    this.setStatusOverride(`${chalk.red(`✗ ${text}`)}`);
     this.statusResetTimer = setTimeout(() => {
+      this.clearStatusOverride();
       this.renderReadyStatus();
       this.statusResetTimer = null;
     }, 2000);
@@ -231,11 +235,7 @@ export class FixedBottomToolbar {
 
     // Line 1 (top): Spinner area - always show something
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
-    if (this.loadingText) {
-      output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}`);
-    } else {
-      output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
-    }
+    this.writeCurrentStatus();
 
     // Position cursor at prompt line for input
     output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + 1}G`);
@@ -260,11 +260,7 @@ export class FixedBottomToolbar {
 
       // Line 1 (top): Spinner area
       output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
-      if (this.loadingText) {
-        output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}`);
-      } else {
-        output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
-      }
+      this.writeCurrentStatus();
 
       // Position cursor at end of input
       this.promptActive = true;
@@ -462,6 +458,7 @@ export class FixedBottomToolbar {
     }
 
     this.hideCursor();
+    this.clearStatusOverride();
     output.write('\x1b[s');
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
@@ -489,6 +486,8 @@ export class FixedBottomToolbar {
     }
     if (this.loadingText) {
       output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}`);
+    } else if (this.statusOverrideText) {
+      output.write(this.statusOverrideText);
     } else {
       output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
     }
@@ -506,6 +505,15 @@ export class FixedBottomToolbar {
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K${text}`);
     output.write('\x1b[u');
     this.restorePromptCursor();
+  }
+
+  private setStatusOverride(text: string): void {
+    this.statusOverrideText = text;
+    this.writeStatus(text);
+  }
+
+  private clearStatusOverride(): void {
+    this.statusOverrideText = null;
   }
 
   setHelpText(text: string | null | undefined): void {
