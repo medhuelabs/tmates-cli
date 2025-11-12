@@ -336,7 +336,7 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
       });
     }
 
-    content += '\nCommands: [number] to open, "refresh", "back", "home", "/quit"\n';
+    content += '\nCommands: [number] to open, "/refresh", "/back", "/home", "/quit"\n';
 
     toolbar.renderContent(content);
     const answerRaw = await toolbar.promptUser();
@@ -354,7 +354,7 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     if (isBack(answer)) {
       return { type: 'back' };
     }
-    if (!answer || answer === 'refresh' || answer === 'r') {
+    if (!answer || answer === '/refresh' || answer === '/r') {
       return { type: 'stay', screen: state };
     }
     const index = parseInt(answer, 10);
@@ -407,7 +407,7 @@ async function handlePinboardDetail(state: {
     });
   }
 
-  content += '\nCommands: "back", "home", "/quit"\n';
+  content += '\nCommands: "/back", "/home", "/quit"\n';
 
   toolbar.renderContent(content);
   const answerRaw = await toolbar.promptUser();
@@ -451,7 +451,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
 
     content += table.toString() + '\n';
     content +=
-      'Commands: "add <number|key>", "remove <number|key>", "refresh", "back", "home", "/quit"\n';
+      'Commands: "add <number|key>", "remove <number|key>", "/refresh", "/back", "/home", "/quit"\n';
 
     toolbar.renderContent(content);
     const answerRaw = await toolbar.promptUser();
@@ -467,7 +467,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
     if (isHome(lowered)) {
       return { type: 'home' };
     }
-    if (!answer || lowered === 'refresh' || lowered === 'r') {
+    if (!answer || lowered === '/refresh' || lowered === '/r') {
       return { type: 'stay', screen: { type: 'teammates' } };
     }
     if (isBack(lowered)) {
@@ -545,7 +545,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     }
 
     content +=
-      'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "refresh", "back", "home", "/quit"\n';
+      'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "/refresh", "/back", "/home", "/quit"\n';
 
     toolbar.renderContent(content);
     debugLog('Prompting for user input on Messages screen.');
@@ -569,7 +569,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     if (isHome(lowered)) {
       return { type: 'home' };
     }
-    if (!answer || lowered === 'refresh' || lowered === 'r') {
+    if (!answer || lowered === '/refresh' || lowered === '/r') {
       return { type: 'stay', screen: { type: 'messages' } };
     }
     if (isBack(lowered)) {
@@ -780,7 +780,7 @@ async function handleMessageThread(
       return { type: 'back' };
     }
 
-    if (lowered === '/refresh' || lowered === 'refresh' || lowered === 'r') {
+    if (lowered === '/refresh' || lowered === '/r') {
       const previousCount = messages.length;
       try {
         await loadThread('Refreshing conversation...');
@@ -847,7 +847,7 @@ async function handleFiles(state: { type: 'files'; limit: number }): Promise<Scr
         content += `${itemNumber} ${chalk.bold(file.name)} ${chalk.gray(`(${file.modified_display}, ${file.size_display})`)}\n`;
       });
     }
-    content += 'Commands: "refresh", "back", "home", "/quit"\n';
+    content += 'Commands: "/refresh", "/back", "/home", "/quit"\n';
 
     toolbar.renderContent(content);
     const answerRaw = await toolbar.promptUser();
@@ -892,7 +892,7 @@ async function handleSettings(_state: { type: 'settings' }): Promise<ScreenActio
       content += `- ${label}: ${formatSettingValue(value)}\n`;
     });
 
-    content += '\nCommands: "back", "home", "/quit"\n';
+    content += '\nCommands: "/back", "/home", "/quit"\n';
 
     toolbar.renderContent(content);
     const answerRaw = await toolbar.promptUser();
