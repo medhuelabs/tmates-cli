@@ -36,14 +36,14 @@ function debugLog(message: string): void {
   }
 }
 
-function renderScreen(content: string, hint?: string): void {
+function renderScreen(content: string, hint?: string, options?: { alignBottom?: boolean }): void {
   if (!output.isTTY && hint && hint.trim().length > 0) {
     const separator = content.endsWith('\n') ? '' : '\n';
-    toolbar.renderContent(`${content}${separator}${chalk.gray(hint)}\n`);
+    toolbar.renderContent(`${content}${separator}${chalk.gray(hint)}\n`, options);
     return;
   }
 
-  toolbar.renderContent(content);
+  toolbar.renderContent(content, options);
 }
 
 export async function launchInteractiveCli(): Promise<void> {
@@ -796,15 +796,15 @@ async function handleMessageThread(
   }
   content += printMessagesStartingAt(initialStart);
   let conversationBuffer = content;
-  renderScreen(conversationBuffer, hint);
+  renderScreen(conversationBuffer, hint, { alignBottom: true });
 
   const appendToConversation = (extra: string): void => {
     if (!extra || extra.trim().length === 0) {
-      renderScreen(conversationBuffer, hint);
+      renderScreen(conversationBuffer, hint, { alignBottom: true });
       return;
     }
     conversationBuffer += extra;
-    renderScreen(conversationBuffer, hint);
+    renderScreen(conversationBuffer, hint, { alignBottom: true });
   };
 
   const promptLine = async (): Promise<string | null> => toolbar.promptUser();
@@ -846,13 +846,13 @@ async function handleMessageThread(
         const newContent = printMessagesStartingAt(previousCount);
         if (!newContent.trim()) {
           toolbar.showSuccess('No new messages.');
-          renderScreen(conversationBuffer, hint);
+          renderScreen(conversationBuffer, hint, { alignBottom: true });
         } else {
           appendToConversation(newContent);
         }
       } catch (error) {
         toolbar.showError('Failed to refresh conversation.');
-        renderScreen(conversationBuffer, hint);
+        renderScreen(conversationBuffer, hint, { alignBottom: true });
       }
       input = await promptLine();
       continue;
@@ -879,7 +879,7 @@ async function handleMessageThread(
     } catch (error) {
       toolbar.clearSpinner();
       toolbar.showError('Failed to send message.');
-      renderScreen(conversationBuffer, hint);
+      renderScreen(conversationBuffer, hint, { alignBottom: true });
     }
 
     input = await promptLine();

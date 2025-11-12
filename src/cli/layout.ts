@@ -39,7 +39,7 @@ export class FixedBottomToolbar {
   /**
    * Clear content area and render fresh content
    */
-  renderContent(content: string): void {
+  renderContent(content: string, options?: { alignBottom?: boolean }): void {
     if (!output.isTTY) {
       output.write(content);
       return;
@@ -54,7 +54,15 @@ export class FixedBottomToolbar {
 
     // Split content into lines and limit to available height
     const contentLines = content.split('\n');
-    const displayLines = contentLines.slice(0, contentHeight);
+    let displayLines = contentLines.slice(0, contentHeight);
+
+    if (options?.alignBottom) {
+      displayLines = contentLines.slice(-contentHeight);
+      const paddingNeeded = Math.max(contentHeight - displayLines.length, 0);
+      if (paddingNeeded > 0) {
+        displayLines = new Array(paddingNeeded).fill('').concat(displayLines);
+      }
+    }
 
     output.write(displayLines.join('\n'));
 
