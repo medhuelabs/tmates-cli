@@ -347,7 +347,7 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
 }
 
 async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promise<ScreenAction> {
-  const hint = 'Commands: [number] to open, "/refresh", "/back", "/home", "/quit"';
+  const hint = '? [number]=open /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
   toolbar.showSpinner('Loading pinboard...');
@@ -418,7 +418,7 @@ async function handlePinboardDetail(state: {
   post: PinboardPost;
 }): Promise<ScreenAction> {
   const post = state.post;
-  const hint = 'Commands: "/back", "/home", "/quit"';
+  const hint = '? /back /home /quit';
   toolbar.setHelpText(hint);
 
   try {
@@ -464,7 +464,7 @@ async function handlePinboardDetail(state: {
 }
 
 async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAction> {
-  const hint = 'Commands: "add <number|key>", "remove <number|key>", "/refresh", "/back", "/home", "/quit"';
+  const hint = '? add <index|key> remove <index|key> /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
   toolbar.showSpinner('Loading teammates...');
@@ -561,7 +561,7 @@ function resolveAgentTarget(target: string, entries: AgentStoreEntry[]): AgentSt
 }
 
 async function handleMessages(_state: { type: 'messages' }): Promise<ScreenAction> {
-  const hint = 'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "/refresh", "/back", "/home", "/quit"';
+  const hint = '? [number]=open new <agent_key> delete <number> clear <number> /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
   toolbar.showSpinner('Loading conversations...');
@@ -720,7 +720,7 @@ async function handleMessageThread(
   let title = state.title;
   const seenKeys = new Set<string>();
   const maxHistory = 10;
-  const hint = 'Commands: type a message, or use /refresh, /back, /home, /quit.';
+  const hint = '? type message /refresh /back /home /quit';
   toolbar.setHelpText(hint);
   const finalize = (action: ScreenAction): ScreenAction => {
     toolbar.resetHelpText();
@@ -881,7 +881,7 @@ async function handleMessageThread(
 }
 
 async function handleFiles(state: { type: 'files'; limit: number }): Promise<ScreenAction> {
-  const hint = 'Commands: "/refresh", "/back", "/home", "/quit"';
+  const hint = '? /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
   toolbar.showSpinner('Loading files...');
@@ -927,7 +927,7 @@ async function handleFiles(state: { type: 'files'; limit: number }): Promise<Scr
 }
 
 async function handleSettings(_state: { type: 'settings' }): Promise<ScreenAction> {
-  const hint = 'Commands: "/back", "/home", "/quit"';
+  const hint = '? /back /home /quit';
   toolbar.setHelpText(hint);
 
   toolbar.showSpinner('Loading settings...');
