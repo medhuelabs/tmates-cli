@@ -3,7 +3,6 @@ import { stdin as input, stdout as output } from 'process';
 import chalk from 'chalk';
 import ora from 'ora';
 import type { Session } from '@supabase/supabase-js';
-import Table from 'cli-table3';
 
 import { getActiveSession, refreshSession, sendOtp, verifyOtp } from '../auth/supabase-auth';
 import { fetchPinboardPosts, PinboardPost, fetchPinboardPost } from '../api/pinboard';
@@ -341,7 +340,8 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
     case '/exit':
       return { type: 'quit' };
     default:
-      toolbar.renderContent(content + `${chalk.yellow('Unknown option.')} Try again.\n`);
+      toolbar.showError('Unknown option.');
+      renderScreen(content);
       return { type: 'stay' };
   }
 }
@@ -391,10 +391,8 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     }
     const index = parseInt(answer, 10);
     if (Number.isNaN(index) || index < 1 || index > posts.length) {
-      renderScreen(
-        content + `${chalk.yellow('Select a number between 1 and ' + posts.length)}\n`,
-        hint,
-      );
+      toolbar.showError(`Select a number between 1 and ${posts.length}.`);
+      renderScreen(content, hint);
       return { type: 'stay', screen: state };
     }
     const post = posts[index - 1];
@@ -471,27 +469,24 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
   try {
     const store = await fetchAgentStore();
     toolbar.clearSpinner();
-    const storeMap = new Map(store.available_agents.map((entry) => [entry.key, entry] as const));
+    const agents = store.available_agents;
 
     let content = '\n' + brandPrimaryBold('Teammates') + '\n';
-    const table = new Table({
-      head: [chalk.bold('#'), chalk.bold('Agent'), chalk.bold('Status')],
-      colWidths: [4, 30, 40],
-      wordWrap: true,
-    });
+    if (!agents.length) {
+      content += chalk.gray('No teammates available.\n');
+    } else {
+      agents.forEach((agent, index) => {
+        const marker = `${brandPrimary(String(index + 1))}.`;
+        const status = agent.hired ? brandPrimary('Enabled') : chalk.gray('Disabled');
+        content += `${marker} ${chalk.bold(agent.name)} ${status}\n`;
+        if (agent.description) {
+          content += `   ${chalk.gray(agent.description)}\n`;
+        }
+        content += `   ${chalk.gray(`Key: ${agent.key}`)}\n`;
+        content += '\n';
+      });
+    }
 
-    const sorted = store.available_agents;
-    sorted.forEach((agent, index) => {
-      const hired = agent.hired;
-      const status = hired ? brandPrimary('Enabled') : chalk.gray('Disabled');
-      table.push([
-        index + 1,
-        `${agent.name}${agent.description ? `\n${chalk.gray(agent.description)}` : ''}`,
-        status,
-      ]);
-    });
-
-    content += table.toString() + '\n';
     renderScreen(content, hint);
     const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
@@ -516,13 +511,15 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
     const [command, ...rest] = lowered.split(/\s+/);
     const targetRaw = rest.join(' ').trim();
     if (!['add', 'remove'].includes(command)) {
-      renderScreen(content + chalk.yellow('Unknown command.') + '\n', hint);
+      toolbar.showError('Unknown command.');
+      renderScreen(content, hint);
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
     const entry = resolveAgentTarget(targetRaw, store.available_agents);
     if (!entry) {
-      renderScreen(content + chalk.yellow('No matching agent found.') + '\n', hint);
+      toolbar.showError('No matching agent found.');
+      renderScreen(content, hint);
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
@@ -535,7 +532,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
       toolbar.showSuccess(`${entry.name} ${command === 'add' ? 'enabled' : 'disabled'}.`);
     } catch (error) {
       toolbar.showError('Operation failed.');
-      renderScreen(content + formatApiError(error) + '\n', hint);
+      renderScreen(content, hint);
     }
 
     return { type: 'stay', screen: { type: 'teammates' } };
@@ -622,7 +619,8 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     if (Number.isInteger(Number(answer))) {
       const index = Number(answer);
       if (index < 1 || index > threads.length) {
-        renderScreen(content + chalk.yellow('Invalid thread selection.') + '\n', hint);
+        toolbar.showError('Invalid thread selection.');
+        renderScreen(content, hint);
         return { type: 'stay', screen: { type: 'messages' } };
       }
       const thread = threads[index - 1];
@@ -639,18 +637,17 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     switch (command) {
       case 'new':
         if (!restJoined) {
-          renderScreen(
-            content + chalk.yellow('Specify an agent key, e.g. "new adam".') + '\n',
-            hint,
-          );
+          toolbar.showError('Specify an agent key, e.g. "new adam".');
+          renderScreen(content, hint);
           return { type: 'stay', screen: { type: 'messages' } };
         }
         return await createNewThread(restJoined, hint);
       case 'delete':
       case 'clear':
-        return await handleThreadMaintenance(command, restJoined, threads, hint);
+        return await handleThreadMaintenance(command, restJoined, threads, hint, content);
       default:
-        renderScreen(content + chalk.yellow('Unknown command.') + '\n', hint);
+        toolbar.showError('Unknown command.');
+        renderScreen(content, hint);
         return { type: 'stay', screen: { type: 'messages' } };
     }
   } catch (error) {
@@ -683,14 +680,17 @@ async function handleThreadMaintenance(
   target: string,
   threads: ChatThreadSummary[],
   hint: string,
+  baseContent: string,
 ): Promise<ScreenAction> {
   if (!target) {
-    renderScreen(chalk.yellow('Specify the thread number.\n'), hint);
+    toolbar.showError('Specify the thread number.');
+    renderScreen(baseContent, hint);
     return { type: 'stay', screen: { type: 'messages' } };
   }
   const index = Number(target);
   if (!Number.isInteger(index) || index < 1 || index > threads.length) {
-    renderScreen(chalk.yellow('Invalid thread number.\n'), hint);
+    toolbar.showError('Invalid thread number.');
+    renderScreen(baseContent, hint);
     return { type: 'stay', screen: { type: 'messages' } };
   }
   const thread = threads[index - 1];
