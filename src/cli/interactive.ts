@@ -881,7 +881,7 @@ async function handleMessageThread(
       const sentContent = printMessagesStartingAt(offset);
       appendToConversation(sentContent);
 
-      toolbar.showSpinner('Waiting for replies...');
+      toolbar.showSpinner('Waiting for replies');
       try {
         const baseline = messages.length;
         const newMessages = await pollForAgentReplies(state.threadId, baseline, 8, 1200);
