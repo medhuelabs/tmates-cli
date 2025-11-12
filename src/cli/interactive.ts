@@ -350,7 +350,7 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
   const hint = '? [number]=open /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
-  toolbar.showSpinner('Loading pinboard...');
+  toolbar.showSpinner('Loading pinboard');
   try {
     const posts = await fetchPinboardPosts(state.limit);
     toolbar.clearSpinner();
@@ -397,7 +397,7 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     }
     const post = posts[index - 1];
 
-    toolbar.showSpinner('Loading post details...');
+    toolbar.showSpinner('Loading post details');
     const detail = await fetchPinboardPost(post.slug);
     toolbar.clearSpinner();
 
@@ -465,7 +465,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
   const hint = '? add <index|key> remove <index|key> /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
-  toolbar.showSpinner('Loading teammates...');
+  toolbar.showSpinner('Loading teammates');
   try {
     const store = await fetchAgentStore();
     toolbar.clearSpinner();
@@ -561,7 +561,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
   const hint = '? [number]=open new <agent_key> delete <number> clear <number> /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
-  toolbar.showSpinner('Loading conversations...');
+  toolbar.showSpinner('Loading conversations');
   try {
     const threads = await fetchChatThreads();
     toolbar.clearSpinner(); // Clear spinner completely after loading
@@ -744,7 +744,7 @@ async function handleMessageThread(
 
   if (!messages.length || state.needsRefresh) {
     try {
-      await loadThread('Loading conversation...');
+      await loadThread('Loading conversation');
     } catch {
       return finalize({ type: 'back' });
     }
@@ -884,7 +884,7 @@ async function handleFiles(state: { type: 'files'; limit: number }): Promise<Scr
   const hint = '? /refresh /back /home /quit';
   toolbar.setHelpText(hint);
 
-  toolbar.showSpinner('Loading files...');
+  toolbar.showSpinner('Loading files');
   try {
     const listing = await fetchFiles(state.limit);
     toolbar.clearSpinner();
@@ -930,7 +930,7 @@ async function handleSettings(_state: { type: 'settings' }): Promise<ScreenActio
   const hint = '? /back /home /quit';
   toolbar.setHelpText(hint);
 
-  toolbar.showSpinner('Loading settings...');
+  toolbar.showSpinner('Loading settings');
   try {
     const [profile, preferences] = await Promise.all([fetchUserProfile(), fetchMobileSettings()]);
     toolbar.clearSpinner();

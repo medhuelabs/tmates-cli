@@ -19,6 +19,8 @@ export class FixedBottomToolbar {
   private readonly defaultHelpText = '? /quit /back /home';
   private helpText = this.defaultHelpText;
   private statusResetTimer: NodeJS.Timeout | null = null;
+  private promptCursorColumn = 3; // 1-based column index; defaults to prompt start
+  private promptActive = false;
 
   /**
    * Initialize the fixed bottom area (call once at app start)
@@ -64,6 +66,7 @@ export class FixedBottomToolbar {
       this.renderStatusLine();
     }
     this.renderHelpLine();
+    this.restorePromptCursor();
   }
 
   /**
@@ -97,7 +100,10 @@ export class FixedBottomToolbar {
       output.write('\x1b[u');
 
       frameIndex++;
+      this.restorePromptCursor();
     }, 80);
+
+    this.restorePromptCursor();
   }
 
   /**
@@ -243,6 +249,8 @@ export class FixedBottomToolbar {
       }
 
       // Position cursor at end of input
+      this.promptActive = true;
+      this.promptCursorColumn = this.promptText.length + inputBuffer.length + 1;
       output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + inputBuffer.length + 1}G`);
     };
 
@@ -279,6 +287,8 @@ export class FixedBottomToolbar {
             return;
           }
           isFinished = true;
+          this.promptActive = false;
+          this.promptCursorColumn = this.promptText.length + 1;
           teardown();
           output.write(`\x1b[${terminalHeight + 1}H`);
           rl.close();
@@ -419,6 +429,7 @@ export class FixedBottomToolbar {
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
     this.writeCurrentStatus();
     output.write('\x1b[u');
+    this.restorePromptCursor();
   }
 
   private renderReadyStatus(): void {
@@ -431,6 +442,7 @@ export class FixedBottomToolbar {
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
     output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
     output.write('\x1b[u');
+    this.restorePromptCursor();
   }
 
   private renderHelpLine(): void {
@@ -442,6 +454,7 @@ export class FixedBottomToolbar {
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight}H\x1b[2K${chalk.dim(this.helpText)}`);
     output.write('\x1b[u');
+    this.restorePromptCursor();
   }
 
   private writeCurrentStatus(): void {
@@ -465,6 +478,7 @@ export class FixedBottomToolbar {
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K${text}`);
     output.write('\x1b[u');
+    this.restorePromptCursor();
   }
 
   setHelpText(text: string | null | undefined): void {
@@ -476,6 +490,16 @@ export class FixedBottomToolbar {
   resetHelpText(): void {
     this.helpText = this.defaultHelpText;
     this.renderHelpLine();
+  }
+
+  private restorePromptCursor(): void {
+    if (!output.isTTY || !this.promptActive) {
+      return;
+    }
+
+    const terminalHeight = process.stdout.rows || 24;
+    output.write(`\x1b[${terminalHeight - 1}H`);
+    output.write(`\x1b[${this.promptCursorColumn}G`);
   }
 
   private async promptUserNonInteractive(options: { hint?: string } = {}): Promise<string | null> {
