@@ -255,6 +255,12 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
 
   const email = state.session.user?.email ?? 'unknown user';
 
+  const ascii = [
+    '╭───╮ ',
+    '│^‿^│ ',
+    '╰───╯ '
+  ];
+
   const headerLines = [
     {
       content: 'Welcome back!',
@@ -265,16 +271,28 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
       render: `${chalk.gray('Signed in as ')}${chalk.bold(email)}`,
     },
   ];
-  const headerWidth = headerLines.reduce((max, line) => Math.max(max, line.content.length), 0);
 
-  // Build content for the scrollable area
+  // Calculate widths for the combined layout
+  const asciiWidth = Math.max(...ascii.map(line => line.length));
+  const textWidth = headerLines.reduce((max, line) => Math.max(max, line.content.length), 0);
+  const totalWidth = asciiWidth + 1 + textWidth; // ascii + space + text
+
+  // Build content for the scrollable area with ASCII art on the left
   let content = '\n';
-  content += chalk.gray(`┌${'─'.repeat(headerWidth + 2)}┐`) + '\n';
-  headerLines.forEach((line) => {
-    const padding = ' '.repeat(headerWidth - line.content.length);
-    content += `${chalk.gray('│ ')}${line.render}${padding}${chalk.gray(' │')}\n`;
-  });
-  content += chalk.gray(`└${'─'.repeat(headerWidth + 2)}┘`) + '\n\n';
+  content += chalk.gray(`┌${'─'.repeat(totalWidth + 2)}┐`) + '\n';
+
+  // First line: ASCII art top + Welcome back!
+  const line1Padding = ' '.repeat(textWidth - headerLines[0].content.length);
+  content += `${chalk.gray('│ ')}${brandPrimary(ascii[0])} ${headerLines[0].render}${line1Padding}${chalk.gray(' │')}\n`;
+
+  // Second line: ASCII art middle + Signed in as...
+  const line2Padding = ' '.repeat(textWidth - headerLines[1].content.length);
+  content += `${chalk.gray('│ ')}${brandPrimary(ascii[1])} ${headerLines[1].render}${line2Padding}${chalk.gray(' │')}\n`;
+
+  // Third line: ASCII art bottom + empty space
+  const line3Padding = ' '.repeat(textWidth);
+  content += `${chalk.gray('│ ')}${brandPrimary(ascii[2])} ${line3Padding}${chalk.gray(' │')}\n`;
+  content += chalk.gray(`└${'─'.repeat(totalWidth + 2)}┘`) + '\n\n';
   content += `${brandPrimaryBold('Home')}\n`;
   menuItems.forEach((item) => {
     content += `${brandPrimary(item.key)} ${chalk.bold(item.label)} ${chalk.gray('\u2014 ' + item.summary)}\n`;
