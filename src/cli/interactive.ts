@@ -283,7 +283,7 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
 
   // Build content for the scrollable area with ASCII art on the left
   let content = '\n';
-  content += chalk.gray(`┌${'─'.repeat(totalWidth + 2)}┐`) + '\n';
+  content += chalk.gray(`╭${'─'.repeat(totalWidth + 2)}╮`) + '\n';
 
   // First line: ASCII art top + Welcome back!
   const line1Padding = ' '.repeat(textWidth - headerLines[0].content.length);
@@ -296,7 +296,7 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
   // Third line: ASCII art bottom + Ready to collaborate!
   const line3Padding = ' '.repeat(textWidth - headerLines[2].content.length);
   content += `${chalk.gray('│ ')}${brandPrimary(ascii[2])} ${headerLines[2].render}${line3Padding}${chalk.gray(' │')}\n`;
-  content += chalk.gray(`└${'─'.repeat(totalWidth + 2)}┘`) + '\n\n';
+  content += chalk.gray(`╰${'─'.repeat(totalWidth + 2)}╯`) + '\n\n';
   content += `${brandPrimaryBold('Home')}\n`;
   menuItems.forEach((item) => {
     content += `${brandPrimary(item.key)} ${chalk.bold(item.label)} ${chalk.gray('\u2014 ' + item.summary)}\n`;
