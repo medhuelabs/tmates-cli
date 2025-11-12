@@ -795,7 +795,17 @@ async function handleMessageThread(
     );
   }
   content += printMessagesStartingAt(initialStart);
-  renderScreen(content, hint);
+  let conversationBuffer = content;
+  renderScreen(conversationBuffer, hint);
+
+  const appendToConversation = (extra: string): void => {
+    if (!extra || extra.trim().length === 0) {
+      renderScreen(conversationBuffer, hint);
+      return;
+    }
+    conversationBuffer += extra;
+    renderScreen(conversationBuffer, hint);
+  };
 
   const promptLine = async (): Promise<string | null> => toolbar.promptUser();
 
@@ -835,12 +845,14 @@ async function handleMessageThread(
         await loadThread('Refreshing conversation...');
         const newContent = printMessagesStartingAt(previousCount);
         if (!newContent.trim()) {
-          renderScreen(chalk.gray('No new messages.\n'), hint);
+          toolbar.showSuccess('No new messages.');
+          renderScreen(conversationBuffer, hint);
         } else {
-          renderScreen(newContent, hint);
+          appendToConversation(newContent);
         }
       } catch (error) {
-        renderScreen(formatApiError(error) + '\n', hint);
+        toolbar.showError('Failed to refresh conversation.');
+        renderScreen(conversationBuffer, hint);
       }
       input = await promptLine();
       continue;
@@ -854,7 +866,7 @@ async function handleMessageThread(
       const offset = messages.length;
       messages.push(sent);
       const sentContent = printMessagesStartingAt(offset);
-      renderScreen(sentContent, hint);
+      appendToConversation(sentContent);
 
       const baseline = messages.length;
       const newMessages = await pollForAgentReplies(state.threadId, baseline, 8, 1200);
@@ -862,12 +874,12 @@ async function handleMessageThread(
         const offsetReplies = messages.length;
         messages.push(...newMessages);
         const repliesContent = printMessagesStartingAt(offsetReplies);
-        renderScreen(repliesContent, hint);
+        appendToConversation(repliesContent);
       }
     } catch (error) {
       toolbar.clearSpinner();
       toolbar.showError('Failed to send message.');
-      renderScreen(formatApiError(error) + '\n', hint);
+      renderScreen(conversationBuffer, hint);
     }
 
     input = await promptLine();
