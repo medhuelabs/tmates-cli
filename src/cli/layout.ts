@@ -18,6 +18,7 @@ export class FixedBottomToolbar {
   private readonly promptPrefix = brandPrimary('> ');
   private readonly defaultHelpText = '? /quit /back /home';
   private helpText = this.defaultHelpText;
+  private statusResetTimer: NodeJS.Timeout | null = null;
 
   /**
    * Initialize the fixed bottom area (call once at app start)
@@ -57,6 +58,12 @@ export class FixedBottomToolbar {
 
     // Add some padding before toolbar
     output.write('\n');
+
+    // Ensure status/help lines remain stable after rerendering content
+    if (!this.spinner) {
+      this.renderStatusLine();
+    }
+    this.renderHelpLine();
   }
 
   /**
@@ -69,6 +76,7 @@ export class FixedBottomToolbar {
     }
 
     this.hideSpinner();
+    this.clearStatusResetTimer();
     this.loadingText = text;
 
     // Start animated spinner that updates the toolbar
@@ -108,6 +116,10 @@ export class FixedBottomToolbar {
     }
     // DON'T clear loadingText - keep it for toolbar display
     // Only clear when explicitly setting a new state
+
+    if (!this.loadingText) {
+      this.renderReadyStatus();
+    }
   }
 
   /**
@@ -116,6 +128,7 @@ export class FixedBottomToolbar {
   clearSpinner(): void {
     this.hideSpinner();
     this.loadingText = null;
+    this.renderReadyStatus();
   }
 
   /**
@@ -128,17 +141,12 @@ export class FixedBottomToolbar {
     }
 
     this.hideSpinner();
-
-    // Just write the success message and let it flow naturally
-    output.write(`${chalk.green(`✓ ${text}`)}\n`);
-
-    setTimeout(() => {
-      // Clear the success message after 2 seconds by moving up and clearing
-      if (output.isTTY) {
-        readline.moveCursor(output, 0, -1);
-        this.clearLine();
-        output.write('\n');
-      }
+    this.loadingText = null;
+    this.clearStatusResetTimer();
+    this.writeStatus(`${chalk.green(`✓ ${text}`)}`);
+    this.statusResetTimer = setTimeout(() => {
+      this.renderReadyStatus();
+      this.statusResetTimer = null;
     }, 2000);
   }
 
@@ -152,17 +160,12 @@ export class FixedBottomToolbar {
     }
 
     this.hideSpinner();
-
-    // Just write the error message and let it flow naturally
-    output.write(`${chalk.red(`✗ ${text}`)}\n`);
-
-    setTimeout(() => {
-      // Clear the error message after 2 seconds by moving up and clearing
-      if (output.isTTY) {
-        readline.moveCursor(output, 0, -1);
-        this.clearLine();
-        output.write('\n');
-      }
+    this.loadingText = null;
+    this.clearStatusResetTimer();
+    this.writeStatus(`${chalk.red(`✗ ${text}`)}`);
+    this.statusResetTimer = setTimeout(() => {
+      this.renderReadyStatus();
+      this.statusResetTimer = null;
     }, 2000);
   }
 
@@ -399,13 +402,80 @@ export class FixedBottomToolbar {
     readline.clearLine(output, 0);
   }
 
+  private clearStatusResetTimer(): void {
+    if (this.statusResetTimer) {
+      clearTimeout(this.statusResetTimer);
+      this.statusResetTimer = null;
+    }
+  }
+
+  private renderStatusLine(): void {
+    if (!output.isTTY) {
+      return;
+    }
+
+    output.write('\x1b[s');
+    const terminalHeight = process.stdout.rows || 24;
+    output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
+    this.writeCurrentStatus();
+    output.write('\x1b[u');
+  }
+
+  private renderReadyStatus(): void {
+    if (!output.isTTY) {
+      return;
+    }
+
+    output.write('\x1b[s');
+    const terminalHeight = process.stdout.rows || 24;
+    output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
+    output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
+    output.write('\x1b[u');
+  }
+
+  private renderHelpLine(): void {
+    if (!output.isTTY) {
+      return;
+    }
+
+    output.write('\x1b[s');
+    const terminalHeight = process.stdout.rows || 24;
+    output.write(`\x1b[${terminalHeight}H\x1b[2K${chalk.dim(this.helpText)}`);
+    output.write('\x1b[u');
+  }
+
+  private writeCurrentStatus(): void {
+    if (!output.isTTY) {
+      return;
+    }
+    if (this.loadingText) {
+      output.write(`${chalk.cyan('⠋')} ${chalk.gray(this.loadingText + '...')}`);
+    } else {
+      output.write(`${chalk.green('✓')} ${chalk.gray('Ready')}`);
+    }
+  }
+
+  private writeStatus(text: string): void {
+    if (!output.isTTY) {
+      output.write(`${text}\n`);
+      return;
+    }
+
+    output.write('\x1b[s');
+    const terminalHeight = process.stdout.rows || 24;
+    output.write(`\x1b[${terminalHeight - 2}H\x1b[2K${text}`);
+    output.write('\x1b[u');
+  }
+
   setHelpText(text: string | null | undefined): void {
     const normalized = text?.trim();
     this.helpText = normalized && normalized.length > 0 ? normalized : this.defaultHelpText;
+    this.renderHelpLine();
   }
 
   resetHelpText(): void {
     this.helpText = this.defaultHelpText;
+    this.renderHelpLine();
   }
 
   private async promptUserNonInteractive(options: { hint?: string } = {}): Promise<string | null> {
