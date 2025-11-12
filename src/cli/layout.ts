@@ -21,6 +21,8 @@ export class FixedBottomToolbar {
   private statusResetTimer: NodeJS.Timeout | null = null;
   private promptCursorColumn = 3; // 1-based column index; defaults to prompt start
   private promptActive = false;
+  private cursorHidden = false;
+  private promptRefresh: (() => void) | null = null;
 
   /**
    * Initialize the fixed bottom area (call once at app start)
@@ -46,6 +48,8 @@ export class FixedBottomToolbar {
     }
 
     // Clear entire screen and position at top
+    this.hideCursor();
+    output.write('\x1b[s');
     output.write('\x1b[2J\x1b[H');
 
     // Write the content, but leave space for the 3-line toolbar at bottom
@@ -69,12 +73,17 @@ export class FixedBottomToolbar {
     // Add some padding before toolbar
     output.write('\n');
 
-    // Ensure status/help lines remain stable after rerendering content
-    if (!this.spinner) {
-      this.renderStatusLine();
+    output.write('\x1b[u');
+
+    if (this.promptRefresh) {
+      this.promptRefresh();
+    } else {
+      if (!this.spinner) {
+        this.renderStatusLine();
+      }
+      this.renderHelpLine();
+      this.restorePromptCursor();
     }
-    this.renderHelpLine();
-    this.restorePromptCursor();
   }
 
   /**
@@ -98,6 +107,7 @@ export class FixedBottomToolbar {
       const terminalHeight = process.stdout.rows || 24;
 
       // Save cursor position
+      this.hideCursor();
       output.write('\x1b[s');
 
       // Update spinner line at bottom of screen
@@ -260,7 +270,10 @@ export class FixedBottomToolbar {
       this.promptActive = true;
       this.promptCursorColumn = this.promptText.length + inputBuffer.length + 1;
       output.write(`\x1b[${terminalHeight - 1}H\x1b[${this.promptText.length + inputBuffer.length + 1}G`);
+      this.showCursor();
     };
+
+    this.promptRefresh = refreshDisplay;
 
     return new Promise<string | null>((resolve) => {
       // Check if we can use raw mode (only works in true interactive TTY)
@@ -297,6 +310,8 @@ export class FixedBottomToolbar {
           isFinished = true;
           this.promptActive = false;
           this.promptCursorColumn = this.promptText.length + 1;
+          this.hideCursor();
+          this.promptRefresh = null;
           teardown();
           output.write(`\x1b[${terminalHeight + 1}H`);
           rl.close();
@@ -432,6 +447,7 @@ export class FixedBottomToolbar {
       return;
     }
 
+    this.hideCursor();
     output.write('\x1b[s');
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
@@ -445,6 +461,7 @@ export class FixedBottomToolbar {
       return;
     }
 
+    this.hideCursor();
     output.write('\x1b[s');
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K`);
@@ -458,6 +475,7 @@ export class FixedBottomToolbar {
       return;
     }
 
+    this.hideCursor();
     output.write('\x1b[s');
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight}H\x1b[2K${chalk.dim(this.helpText)}`);
@@ -482,6 +500,7 @@ export class FixedBottomToolbar {
       return;
     }
 
+    this.hideCursor();
     output.write('\x1b[s');
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight - 2}H\x1b[2K${text}`);
@@ -501,13 +520,35 @@ export class FixedBottomToolbar {
   }
 
   private restorePromptCursor(): void {
-    if (!output.isTTY || !this.promptActive) {
+    if (!output.isTTY) {
+      return;
+    }
+
+    if (!this.promptActive) {
+      this.hideCursor();
       return;
     }
 
     const terminalHeight = process.stdout.rows || 24;
     output.write(`\x1b[${terminalHeight - 1}H`);
     output.write(`\x1b[${this.promptCursorColumn}G`);
+    this.showCursor();
+  }
+
+  private hideCursor(): void {
+    if (!output.isTTY || this.cursorHidden) {
+      return;
+    }
+    output.write('\x1b[?25l');
+    this.cursorHidden = true;
+  }
+
+  private showCursor(): void {
+    if (!output.isTTY || !this.cursorHidden) {
+      return;
+    }
+    output.write('\x1b[?25h');
+    this.cursorHidden = false;
   }
 
   private async promptUserNonInteractive(options: { hint?: string } = {}): Promise<string | null> {

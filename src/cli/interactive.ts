@@ -868,21 +868,30 @@ async function handleMessageThread(
       const sentContent = printMessagesStartingAt(offset);
       appendToConversation(sentContent);
 
-      const baseline = messages.length;
-      const newMessages = await pollForAgentReplies(state.threadId, baseline, 8, 1200);
-      if (newMessages.length) {
-        const offsetReplies = messages.length;
-        messages.push(...newMessages);
-        const repliesContent = printMessagesStartingAt(offsetReplies);
-        appendToConversation(repliesContent);
+      const nextInputPromise = promptLine();
+
+      try {
+        const baseline = messages.length;
+        const newMessages = await pollForAgentReplies(state.threadId, baseline, 8, 1200);
+        if (newMessages.length) {
+          const offsetReplies = messages.length;
+          messages.push(...newMessages);
+          const repliesContent = printMessagesStartingAt(offsetReplies);
+          appendToConversation(repliesContent);
+        }
+      } catch (error) {
+        debugLog(`Failed to retrieve agent replies: ${describeError(error)}`);
       }
+
+      input = await nextInputPromise;
+      continue;
     } catch (error) {
       toolbar.clearSpinner();
       toolbar.showError('Failed to send message.');
       renderScreen(conversationBuffer, hint, { alignBottom: true });
+      input = await promptLine();
+      continue;
     }
-
-    input = await promptLine();
   }
 
   state.messages = messages;
