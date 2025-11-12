@@ -16,7 +16,8 @@ export class FixedBottomToolbar {
   private loadingText: string | null = null;
   private readonly promptText = '> ';
   private readonly promptPrefix = brandPrimary('> ');
-  private readonly helpText = '? /quit /back /home';
+  private readonly defaultHelpText = '? /quit /back /home';
+  private helpText = this.defaultHelpText;
 
   /**
    * Initialize the fixed bottom area (call once at app start)
@@ -389,12 +390,22 @@ export class FixedBottomToolbar {
       output.write('\n');
     }
     this.isActive = false;
+    this.resetHelpText();
   }
 
   // Private methods for terminal manipulation
 
   private clearLine(): void {
     readline.clearLine(output, 0);
+  }
+
+  setHelpText(text: string | null | undefined): void {
+    const normalized = text?.trim();
+    this.helpText = normalized && normalized.length > 0 ? normalized : this.defaultHelpText;
+  }
+
+  resetHelpText(): void {
+    this.helpText = this.defaultHelpText;
   }
 
   private async promptUserNonInteractive(options: { hint?: string } = {}): Promise<string | null> {

@@ -37,6 +37,16 @@ function debugLog(message: string): void {
   }
 }
 
+function renderScreen(content: string, hint?: string): void {
+  if (!output.isTTY && hint && hint.trim().length > 0) {
+    const separator = content.endsWith('\n') ? '' : '\n';
+    toolbar.renderContent(`${content}${separator}${chalk.gray(hint)}\n`);
+    return;
+  }
+
+  toolbar.renderContent(content);
+}
+
 export async function launchInteractiveCli(): Promise<void> {
   // Initialize the fixed bottom toolbar
   toolbar.init();
@@ -337,6 +347,9 @@ async function handleHome(state: { type: 'home'; session: Session }): Promise<Sc
 }
 
 async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promise<ScreenAction> {
+  const hint = 'Commands: [number] to open, "/refresh", "/back", "/home", "/quit"';
+  toolbar.setHelpText(hint);
+
   toolbar.showSpinner('Loading pinboard...');
   try {
     const posts = await fetchPinboardPosts(state.limit);
@@ -357,10 +370,7 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
         }
       });
     }
-
-    content += '\nCommands: [number] to open, "/refresh", "/back", "/home", "/quit"\n';
-
-    toolbar.renderContent(content);
+    renderScreen(content, hint);
     const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
@@ -381,8 +391,9 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     }
     const index = parseInt(answer, 10);
     if (Number.isNaN(index) || index < 1 || index > posts.length) {
-      toolbar.renderContent(
+      renderScreen(
         content + `${chalk.yellow('Select a number between 1 and ' + posts.length)}\n`,
+        hint,
       );
       return { type: 'stay', screen: state };
     }
@@ -395,8 +406,10 @@ async function handlePinboard(state: { type: 'pinboard'; limit: number }): Promi
     return { type: 'push', screen: { type: 'pinboard-detail', post: detail } };
   } catch (error) {
     toolbar.showError('Failed to load pinboard');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
     return { type: 'back' };
+  } finally {
+    toolbar.resetHelpText();
   }
 }
 
@@ -405,48 +418,55 @@ async function handlePinboardDetail(state: {
   post: PinboardPost;
 }): Promise<ScreenAction> {
   const post = state.post;
+  const hint = 'Commands: "/back", "/home", "/quit"';
+  toolbar.setHelpText(hint);
 
-  let content = '\n' + chalk.bold(post.title) + '\n';
-  if (post.author_display) {
-    content += chalk.gray(`By ${post.author_display}`) + '\n';
-  }
-  if (post.created_at) {
-    content += chalk.gray(formatDateTime(post.created_at)) + '\n';
-  }
-  content += '\n';
-  const body = post.content_md ?? post.excerpt ?? '(no content)';
-  content += body.trim() + '\n';
-  if (post.attachments?.length) {
-    content += '\nAttachments:\n';
-    post.attachments.forEach((attachment, index) => {
-      content += `  ${index + 1}. ${attachment.label ?? attachment.url} → ${attachment.url}\n`;
-    });
-  }
-  if (post.sources?.length) {
-    content += '\nSources:\n';
-    post.sources.forEach((source, index) => {
-      content += `  ${index + 1}. ${source.label ?? source.url} → ${source.url}\n`;
-    });
-  }
+  try {
+    let content = '\n' + chalk.bold(post.title) + '\n';
+    if (post.author_display) {
+      content += chalk.gray(`By ${post.author_display}`) + '\n';
+    }
+    if (post.created_at) {
+      content += chalk.gray(formatDateTime(post.created_at)) + '\n';
+    }
+    content += '\n';
+    const body = post.content_md ?? post.excerpt ?? '(no content)';
+    content += body.trim() + '\n';
+    if (post.attachments?.length) {
+      content += '\nAttachments:\n';
+      post.attachments.forEach((attachment, index) => {
+        content += `  ${index + 1}. ${attachment.label ?? attachment.url} → ${attachment.url}\n`;
+      });
+    }
+    if (post.sources?.length) {
+      content += '\nSources:\n';
+      post.sources.forEach((source, index) => {
+        content += `  ${index + 1}. ${source.label ?? source.url} → ${source.url}\n`;
+      });
+    }
 
-  content += '\nCommands: "/back", "/home", "/quit"\n';
-
-  toolbar.renderContent(content);
-  const answerRaw = await toolbar.promptUser();
-  if (answerRaw === null) {
-    return { type: 'quit' };
+    renderScreen(content, hint);
+    const answerRaw = await toolbar.promptUser();
+    if (answerRaw === null) {
+      return { type: 'quit' };
+    }
+    const answer = answerRaw.trim().toLowerCase();
+    if (isQuit(answer)) {
+      return { type: 'quit' };
+    }
+    if (isHome(answer)) {
+      return { type: 'home' };
+    }
+    return { type: 'back' };
+  } finally {
+    toolbar.resetHelpText();
   }
-  const answer = answerRaw.trim().toLowerCase();
-  if (isQuit(answer)) {
-    return { type: 'quit' };
-  }
-  if (isHome(answer)) {
-    return { type: 'home' };
-  }
-  return { type: 'back' };
 }
 
 async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAction> {
+  const hint = 'Commands: "add <number|key>", "remove <number|key>", "/refresh", "/back", "/home", "/quit"';
+  toolbar.setHelpText(hint);
+
   toolbar.showSpinner('Loading teammates...');
   try {
     const store = await fetchAgentStore();
@@ -472,10 +492,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
     });
 
     content += table.toString() + '\n';
-    content +=
-      'Commands: "add <number|key>", "remove <number|key>", "/refresh", "/back", "/home", "/quit"\n';
-
-    toolbar.renderContent(content);
+    renderScreen(content, hint);
     const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
@@ -499,13 +516,13 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
     const [command, ...rest] = lowered.split(/\s+/);
     const targetRaw = rest.join(' ').trim();
     if (!['add', 'remove'].includes(command)) {
-      toolbar.renderContent(content + chalk.yellow('Unknown command.') + '\n');
+      renderScreen(content + chalk.yellow('Unknown command.') + '\n', hint);
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
     const entry = resolveAgentTarget(targetRaw, store.available_agents);
     if (!entry) {
-      toolbar.renderContent(content + chalk.yellow('No matching agent found.') + '\n');
+      renderScreen(content + chalk.yellow('No matching agent found.') + '\n', hint);
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
@@ -518,14 +535,16 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
       toolbar.showSuccess(`${entry.name} ${command === 'add' ? 'enabled' : 'disabled'}.`);
     } catch (error) {
       toolbar.showError('Operation failed.');
-      toolbar.renderContent(content + formatApiError(error) + '\n');
+      renderScreen(content + formatApiError(error) + '\n', hint);
     }
 
     return { type: 'stay', screen: { type: 'teammates' } };
   } catch (error) {
     toolbar.showError('Failed to load teammates');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
     return { type: 'back' };
+  } finally {
+    toolbar.resetHelpText();
   }
 }
 
@@ -542,6 +561,9 @@ function resolveAgentTarget(target: string, entries: AgentStoreEntry[]): AgentSt
 }
 
 async function handleMessages(_state: { type: 'messages' }): Promise<ScreenAction> {
+  const hint = 'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "/refresh", "/back", "/home", "/quit"';
+  toolbar.setHelpText(hint);
+
   toolbar.showSpinner('Loading conversations...');
   try {
     const threads = await fetchChatThreads();
@@ -566,10 +588,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
       });
     }
 
-    content +=
-      'Commands: [number] to open, "new <agent_key>", "delete <number>", "clear <number>", "/refresh", "/back", "/home", "/quit"\n';
-
-    toolbar.renderContent(content);
+    renderScreen(content, hint);
     debugLog('Prompting for user input on Messages screen.');
     const rawAnswer = await toolbar.promptUser();
     if (rawAnswer === null) {
@@ -603,7 +622,7 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     if (Number.isInteger(Number(answer))) {
       const index = Number(answer);
       if (index < 1 || index > threads.length) {
-        toolbar.renderContent(content + chalk.yellow('Invalid thread selection.') + '\n');
+        renderScreen(content + chalk.yellow('Invalid thread selection.') + '\n', hint);
         return { type: 'stay', screen: { type: 'messages' } };
       }
       const thread = threads[index - 1];
@@ -620,27 +639,30 @@ async function handleMessages(_state: { type: 'messages' }): Promise<ScreenActio
     switch (command) {
       case 'new':
         if (!restJoined) {
-          toolbar.renderContent(
+          renderScreen(
             content + chalk.yellow('Specify an agent key, e.g. "new adam".') + '\n',
+            hint,
           );
           return { type: 'stay', screen: { type: 'messages' } };
         }
-        return await createNewThread(restJoined);
+        return await createNewThread(restJoined, hint);
       case 'delete':
       case 'clear':
-        return await handleThreadMaintenance(command, restJoined, threads);
+        return await handleThreadMaintenance(command, restJoined, threads, hint);
       default:
-        toolbar.renderContent(content + chalk.yellow('Unknown command.') + '\n');
+        renderScreen(content + chalk.yellow('Unknown command.') + '\n', hint);
         return { type: 'stay', screen: { type: 'messages' } };
     }
   } catch (error) {
     toolbar.showError('Failed to load conversations');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
     return { type: 'back' };
+  } finally {
+    toolbar.resetHelpText();
   }
 }
 
-async function createNewThread(agentKey: string): Promise<ScreenAction> {
+async function createNewThread(agentKey: string, hint: string): Promise<ScreenAction> {
   toolbar.showSpinner(`Creating conversation with ${agentKey}...`);
   try {
     const thread = await createChatThread(agentKey);
@@ -651,7 +673,7 @@ async function createNewThread(agentKey: string): Promise<ScreenAction> {
     };
   } catch (error) {
     toolbar.showError('Failed to create conversation.');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
     return { type: 'stay', screen: { type: 'messages' } };
   }
 }
@@ -660,14 +682,15 @@ async function handleThreadMaintenance(
   command: string,
   target: string,
   threads: ChatThreadSummary[],
+  hint: string,
 ): Promise<ScreenAction> {
   if (!target) {
-    toolbar.renderContent(chalk.yellow('Specify the thread number.\n'));
+    renderScreen(chalk.yellow('Specify the thread number.\n'), hint);
     return { type: 'stay', screen: { type: 'messages' } };
   }
   const index = Number(target);
   if (!Number.isInteger(index) || index < 1 || index > threads.length) {
-    toolbar.renderContent(chalk.yellow('Invalid thread number.\n'));
+    renderScreen(chalk.yellow('Invalid thread number.\n'), hint);
     return { type: 'stay', screen: { type: 'messages' } };
   }
   const thread = threads[index - 1];
@@ -685,7 +708,7 @@ async function handleThreadMaintenance(
   } catch (error) {
     toolbar.clearSpinner();
     toolbar.showError('Operation failed.');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
   }
   return { type: 'stay', screen: { type: 'messages' } };
 }
@@ -697,6 +720,12 @@ async function handleMessageThread(
   let title = state.title;
   const seenKeys = new Set<string>();
   const maxHistory = 10;
+  const hint = 'Commands: type a message, or use /refresh, /back, /home, /quit.';
+  toolbar.setHelpText(hint);
+  const finalize = (action: ScreenAction): ScreenAction => {
+    toolbar.resetHelpText();
+    return action;
+  };
 
   const loadThread = async (label: string): Promise<void> => {
     toolbar.showSpinner(label);
@@ -708,7 +737,7 @@ async function handleMessageThread(
     } catch (error) {
       toolbar.clearSpinner();
       toolbar.showError('Failed to load conversation.');
-      toolbar.renderContent(formatApiError(error) + '\n');
+      renderScreen(formatApiError(error) + '\n', hint);
       throw error;
     }
   };
@@ -717,7 +746,7 @@ async function handleMessageThread(
     try {
       await loadThread('Loading conversation...');
     } catch {
-      return { type: 'back' };
+      return finalize({ type: 'back' });
     }
   }
 
@@ -766,9 +795,7 @@ async function handleMessageThread(
     );
   }
   content += printMessagesStartingAt(initialStart);
-  content += `${chalk.gray('Commands: type a message, or use /refresh, /back, /home, /quit.')}\n`;
-
-  toolbar.renderContent(content);
+  renderScreen(content, hint);
 
   const promptLine = async (): Promise<string | null> => toolbar.promptUser();
 
@@ -791,7 +818,7 @@ async function handleMessageThread(
       state.totalMessages = messages.length;
       state.title = title;
       state.needsRefresh = false;
-      return { type: 'home' };
+      return finalize({ type: 'home' });
     }
 
     if (isBack(lowered)) {
@@ -799,7 +826,7 @@ async function handleMessageThread(
       state.totalMessages = messages.length;
       state.title = title;
       state.needsRefresh = false;
-      return { type: 'back' };
+      return finalize({ type: 'back' });
     }
 
     if (lowered === '/refresh' || lowered === '/r') {
@@ -808,12 +835,12 @@ async function handleMessageThread(
         await loadThread('Refreshing conversation...');
         const newContent = printMessagesStartingAt(previousCount);
         if (!newContent.trim()) {
-          toolbar.renderContent(chalk.gray('No new messages.\n'));
+          renderScreen(chalk.gray('No new messages.\n'), hint);
         } else {
-          toolbar.renderContent(newContent);
+          renderScreen(newContent, hint);
         }
       } catch (error) {
-        toolbar.renderContent(formatApiError(error) + '\n');
+        renderScreen(formatApiError(error) + '\n', hint);
       }
       input = await promptLine();
       continue;
@@ -827,7 +854,7 @@ async function handleMessageThread(
       const offset = messages.length;
       messages.push(sent);
       const sentContent = printMessagesStartingAt(offset);
-      toolbar.renderContent(sentContent);
+      renderScreen(sentContent, hint);
 
       const baseline = messages.length;
       const newMessages = await pollForAgentReplies(state.threadId, baseline, 8, 1200);
@@ -835,12 +862,12 @@ async function handleMessageThread(
         const offsetReplies = messages.length;
         messages.push(...newMessages);
         const repliesContent = printMessagesStartingAt(offsetReplies);
-        toolbar.renderContent(repliesContent);
+        renderScreen(repliesContent, hint);
       }
     } catch (error) {
       toolbar.clearSpinner();
       toolbar.showError('Failed to send message.');
-      toolbar.renderContent(formatApiError(error) + '\n');
+      renderScreen(formatApiError(error) + '\n', hint);
     }
 
     input = await promptLine();
@@ -850,10 +877,13 @@ async function handleMessageThread(
   state.totalMessages = messages.length;
   state.title = title;
   state.needsRefresh = false;
-  return { type: 'quit' };
+  return finalize({ type: 'quit' });
 }
 
 async function handleFiles(state: { type: 'files'; limit: number }): Promise<ScreenAction> {
+  const hint = 'Commands: "/refresh", "/back", "/home", "/quit"';
+  toolbar.setHelpText(hint);
+
   toolbar.showSpinner('Loading files...');
   try {
     const listing = await fetchFiles(state.limit);
@@ -869,9 +899,7 @@ async function handleFiles(state: { type: 'files'; limit: number }): Promise<Scr
         content += `${itemNumber} ${chalk.bold(file.name)} ${chalk.gray(`(${file.modified_display}, ${file.size_display})`)}\n`;
       });
     }
-    content += 'Commands: "/refresh", "/back", "/home", "/quit"\n';
-
-    toolbar.renderContent(content);
+    renderScreen(content, hint);
     const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
@@ -891,12 +919,17 @@ async function handleFiles(state: { type: 'files'; limit: number }): Promise<Scr
   } catch (error) {
     toolbar.clearSpinner();
     toolbar.showError('Failed to load files.');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
     return { type: 'back' };
+  } finally {
+    toolbar.resetHelpText();
   }
 }
 
 async function handleSettings(_state: { type: 'settings' }): Promise<ScreenAction> {
+  const hint = 'Commands: "/back", "/home", "/quit"';
+  toolbar.setHelpText(hint);
+
   toolbar.showSpinner('Loading settings...');
   try {
     const [profile, preferences] = await Promise.all([fetchUserProfile(), fetchMobileSettings()]);
@@ -914,9 +947,7 @@ async function handleSettings(_state: { type: 'settings' }): Promise<ScreenActio
       content += `- ${label}: ${formatSettingValue(value)}\n`;
     });
 
-    content += '\nCommands: "/back", "/home", "/quit"\n';
-
-    toolbar.renderContent(content);
+    renderScreen(content, hint);
     const answerRaw = await toolbar.promptUser();
     if (answerRaw === null) {
       return { type: 'quit' };
@@ -932,8 +963,10 @@ async function handleSettings(_state: { type: 'settings' }): Promise<ScreenActio
   } catch (error) {
     toolbar.clearSpinner();
     toolbar.showError('Failed to load settings.');
-    toolbar.renderContent(formatApiError(error) + '\n');
+    renderScreen(formatApiError(error) + '\n', hint);
     return { type: 'back' };
+  } finally {
+    toolbar.resetHelpText();
   }
 }
 
