@@ -7,7 +7,7 @@ import type { Session } from '@supabase/supabase-js';
 import pkg from '../../package.json';
 import { getActiveSession, refreshSession, sendOtp, verifyOtp } from '../auth/supabase-auth';
 import { fetchPinboardPosts, PinboardPost, fetchPinboardPost } from '../api/pinboard';
-import { AgentStoreEntry, fetchAgentStore, manageAgent } from '../api/teammates';
+import { AgentMetadata, fetchAgentsMetadata, manageAgent } from '../api/teammates';
 import {
   ChatMessage,
   ChatThreadSummary,
@@ -482,9 +482,13 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
 
   toolbar.showSpinner('Loading teammates');
   try {
-    const store = await fetchAgentStore();
+    const metadataResponse = await fetchAgentsMetadata();
     toolbar.clearSpinner();
-    const agents = store.available_agents;
+    const agents = Object.values(metadataResponse.agents_metadata ?? {}).sort((a, b) => {
+      const nameA = (a.name || a.key || '').toLowerCase();
+      const nameB = (b.name || b.key || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
 
     let content = '\n' + brandPrimaryBold('Teammates') + '\n';
     if (!agents.length) {
@@ -493,7 +497,8 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
       agents.forEach((agent, index) => {
         const marker = `${brandPrimary(String(index + 1))}.`;
         const status = agent.hired ? brandPrimary('Enabled') : chalk.gray('Disabled');
-        content += `${marker} ${chalk.bold(agent.name)} ${status}\n`;
+        const displayName = agent.name || agent.key;
+        content += `${marker} ${chalk.bold(displayName)} ${status}\n`;
         if (agent.description) {
           content += `   ${chalk.gray(agent.description)}\n`;
         }
@@ -531,7 +536,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
       return { type: 'stay', screen: { type: 'teammates' } };
     }
 
-    const entry = resolveAgentTarget(targetRaw, store.available_agents);
+    const entry = resolveAgentTarget(targetRaw, agents);
     if (!entry) {
       toolbar.showError('No matching agent found.');
       renderScreen(content, hint);
@@ -544,7 +549,8 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
       if (!response.success) {
         throw new Error(response.message || 'Request failed');
       }
-      toolbar.showSuccess(`${entry.name} ${command === 'add' ? 'enabled' : 'disabled'}.`);
+      const displayName = entry.name || entry.key;
+      toolbar.showSuccess(`${displayName} ${command === 'add' ? 'enabled' : 'disabled'}.`);
     } catch (error) {
       toolbar.showError('Operation failed.');
       renderScreen(content, hint);
@@ -560,7 +566,7 @@ async function handleTeammates(_state: { type: 'teammates' }): Promise<ScreenAct
   }
 }
 
-function resolveAgentTarget(target: string, entries: AgentStoreEntry[]): AgentStoreEntry | null {
+function resolveAgentTarget(target: string, entries: AgentMetadata[]): AgentMetadata | null {
   if (!target) {
     return null;
   }
